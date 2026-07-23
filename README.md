@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 《月根秘境》
 
 一款“农作物魔法 × 房间制 Roguelike”的原创 C# 像素动作游戏。
@@ -73,3 +74,7 @@ Godot_v4.7.1-stable_mono_win64_console.exe --path .
 ![《月根秘境》视觉方向稿](assets/moonroot-title.png)
 
 > 此图用于确认光影、配色、俯视角和“温暖农场 × 神秘地牢”的整体气质；正式制作时，角色、怪物、地块和 UI 将按统一像素网格重新绘制。
+=======
+# Moon-Root-Secret-Realm-Game
+游戏
+>>>>>>> 5de5fff696a6306fecbefda3706c1bdc21811d3e
