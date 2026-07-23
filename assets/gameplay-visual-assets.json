@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "generationMode": "built-in-imagegen-with-local-chroma-key-removal",
+  "style": "handcrafted-16-bit-top-down-pixel-art",
+  "importDefaults": {
+    "filter": "nearest",
+    "mipmaps": false,
+    "repeat": false,
+    "lossyCompression": false
+  },
+  "atlasPolicy": {
+    "status": "visual-source-ready",
+    "requiresSlicingBeforeRuntime": true,
+    "note": "4x4 describes semantic row and column placement. Generated 1254x1254 boards should be repacked or assigned explicit AtlasTexture regions during development instead of assuming an evenly divisible Hframes layout."
+  },
+  "assets": [
+    {
+      "id": "hud-layout-reference",
+      "category": "ui-mockup",
+      "path": "res://assets/ui/mockups/hud-layout-reference.png",
+      "size": [1672, 941],
+      "alpha": false,
+      "runtime": false,
+      "content": "16:9 HUD placement and hierarchy reference"
+    },
+    {
+      "id": "hud-components",
+      "category": "ui-components",
+      "path": "res://assets/ui/hud-components.png",
+      "sourcePath": "res://assets/ui/source/hud-components-chroma.png",
+      "size": [1536, 1024],
+      "alpha": true,
+      "layout": "freeform-separated-components",
+      "content": [
+        "portrait frame",
+        "player health frame",
+        "red health fill",
+        "energy frame",
+        "cyan energy fill",
+        "boss health frame",
+        "active weapon slot",
+        "reserve weapon slot",
+        "skill slot",
+        "currency capsule",
+        "minimap frame",
+        "interaction prompt frame"
+      ]
+    },
+    {
+      "id": "menu-components",
+      "category": "ui-components",
+      "path": "res://assets/ui/menu-components.png",
+      "sourcePath": "res://assets/ui/source/menu-components-chroma.png",
+      "size": [1536, 1024],
+      "alpha": true,
+      "layout": "freeform-separated-components",
+      "content": [
+        "large panel",
+        "tooltip panel",
+        "item panel",
+        "blank title ribbon",
+        "normal button",
+        "hover button",
+        "normal tab",
+        "selected tab",
+        "divider",
+        "corner ornament"
+      ]
+    },
+    {
+      "id": "ui-icons",
+      "category": "ui-icons",
+      "path": "res://assets/ui/ui-icons.png",
+      "sourcePath": "res://assets/ui/source/ui-icons-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": 4,
+        "columns": 4,
+        "order": [
+          ["health", "energy", "shield", "coin"],
+          ["key", "seed", "sword", "wand"],
+          ["laser", "bomb", "fire", "ice"],
+          ["poison", "speed", "boss", "exit"]
+        ]
+      }
+    },
+    {
+      "id": "projectile-atlas",
+      "category": "combat-projectiles",
+      "path": "res://assets/vfx/projectiles/projectile-atlas.png",
+      "sourcePath": "res://assets/vfx/projectiles/source/projectile-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": 4,
+        "columns": 4,
+        "order": [
+          ["seed", "moonroot-orb", "piercing-crystal", "gold-pellet"],
+          ["thorn", "ember", "bee-stinger", "frost-shard"],
+          ["gear-disc", "poison-orb", "wave-bead", "heavy-shot"],
+          ["homing-star", "root-needle", "charged-sphere", "explosive-pod"]
+        ]
+      }
+    },
+    {
+      "id": "laser-atlas",
+      "category": "combat-laser",
+      "path": "res://assets/vfx/laser/laser-atlas.png",
+      "sourcePath": "res://assets/vfx/laser/source/laser-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["player-cyan", "summer-amber", "winter-ice", "boss-red"],
+        "columns": ["emitter", "beam-start", "repeatable-middle", "impact-end"]
+      }
+    },
+    {
+      "id": "melee-atlas",
+      "category": "combat-melee",
+      "path": "res://assets/vfx/melee/melee-atlas.png",
+      "sourcePath": "res://assets/vfx/melee/source/melee-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["sword-slash", "spear-thrust", "hammer-shock", "scythe-slash"],
+        "columns": ["anticipation", "forming", "impact", "fade"]
+      }
+    },
+    {
+      "id": "combat-impact-atlas",
+      "category": "combat-feedback",
+      "path": "res://assets/vfx/impacts/combat-impact-atlas.png",
+      "sourcePath": "res://assets/vfx/impacts/source/combat-impact-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["normal-hit", "critical-hit", "shield-break", "enemy-defeat"],
+        "columns": ["start", "grow", "peak", "fade"]
+      }
+    },
+    {
+      "id": "destruction-atlas",
+      "category": "environment-feedback",
+      "path": "res://assets/vfx/destruction/destruction-atlas.png",
+      "sourcePath": "res://assets/vfx/destruction/source/destruction-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["wood", "pottery", "stone", "metal"],
+        "columns": ["intact", "damaged", "break", "debris"]
+      }
+    },
+    {
+      "id": "telegraph-atlas",
+      "category": "combat-telegraph",
+      "path": "res://assets/vfx/telegraphs/telegraph-atlas.png",
+      "sourcePath": "res://assets/vfx/telegraphs/source/telegraph-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["circles", "fans", "lines", "special"],
+        "columns": 4
+      }
+    },
+    {
+      "id": "pickup-atlas",
+      "category": "world-pickups",
+      "path": "res://assets/items/pickup-atlas.png",
+      "sourcePath": "res://assets/items/source/pickup-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": 4,
+        "columns": 4,
+        "order": [
+          ["coin", "key", "seed", "health"],
+          ["energy", "shield", "bomb", "healing-herb"],
+          ["treasure-crystal", "damage-up", "speed-up", "luck-up"],
+          ["common-pedestal", "rare-pedestal", "room-reward", "boss-reward"]
+        ]
+      }
+    },
+    {
+      "id": "interactable-atlas",
+      "category": "room-interactables",
+      "path": "res://assets/interactables/common/interactable-atlas.png",
+      "sourcePath": "res://assets/interactables/common/source/interactable-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["door", "chest", "portal", "altar"],
+        "columns": ["dormant-or-closed", "ready-or-sealed", "active-or-open", "spent"]
+      }
+    },
+    {
+      "id": "spring-traps",
+      "category": "stage-traps",
+      "stage": "spring",
+      "path": "res://assets/interactables/traps/spring-traps.png",
+      "sourcePath": "res://assets/interactables/traps/source/spring-traps-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["root-spikes", "spore-vent", "mud-snare", "vine-coil"],
+        "columns": ["off", "warning", "active", "cooldown"]
+      }
+    },
+    {
+      "id": "summer-traps",
+      "category": "stage-traps",
+      "stage": "summer",
+      "path": "res://assets/interactables/traps/summer-traps.png",
+      "sourcePath": "res://assets/interactables/traps/source/summer-traps-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["steam-vent", "mirror-laser", "wax-snare", "pollen-pod"],
+        "columns": ["off", "warning", "active", "cooldown"]
+      }
+    },
+    {
+      "id": "autumn-traps",
+      "category": "stage-traps",
+      "stage": "autumn",
+      "path": "res://assets/interactables/traps/autumn-traps.png",
+      "sourcePath": "res://assets/interactables/traps/source/autumn-traps-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["gear-saw", "conveyor", "falling-sack", "flail-post"],
+        "columns": ["off", "warning", "active", "cooldown"]
+      }
+    },
+    {
+      "id": "winter-traps",
+      "category": "stage-traps",
+      "stage": "winter",
+      "path": "res://assets/interactables/traps/winter-traps.png",
+      "sourcePath": "res://assets/interactables/traps/source/winter-traps-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["ice-spikes", "mirror-relay", "falling-icicle", "freeze-seal"],
+        "columns": ["off", "warning", "active", "cooldown"]
+      }
+    }
+  ]
+}

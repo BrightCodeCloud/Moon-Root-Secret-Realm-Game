@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "assetType": "room-background-plate",
+  "generationMode": "built-in-imagegen",
+  "dimensions": {
+    "width": 1672,
+    "height": 941,
+    "aspectRatio": "16:9"
+  },
+  "rendering": {
+    "filter": "nearest",
+    "mipmaps": false,
+    "repeat": false,
+    "recommendedViewportFit": "cover"
+  },
+  "assets": [
+    {
+      "id": "spring-combat-room",
+      "stage": "spring",
+      "stageName": "苔灯地窖",
+      "roomType": "combat",
+      "path": "res://assets/environments/spring/combat-room.png"
+    },
+    {
+      "id": "spring-boss-room",
+      "stage": "spring",
+      "stageName": "苔灯地窖",
+      "roomType": "boss",
+      "path": "res://assets/environments/spring/boss-room.png"
+    },
+    {
+      "id": "summer-combat-room",
+      "stage": "summer",
+      "stageName": "蜂鸣温室",
+      "roomType": "combat",
+      "path": "res://assets/environments/summer/combat-room.png"
+    },
+    {
+      "id": "summer-boss-room",
+      "stage": "summer",
+      "stageName": "蜂鸣温室",
+      "roomType": "boss",
+      "path": "res://assets/environments/summer/boss-room.png"
+    },
+    {
+      "id": "autumn-combat-room",
+      "stage": "autumn",
+      "stageName": "落穗磨坊",
+      "roomType": "combat",
+      "path": "res://assets/environments/autumn/combat-room.png"
+    },
+    {
+      "id": "autumn-boss-room",
+      "stage": "autumn",
+      "stageName": "落穗磨坊",
+      "roomType": "boss",
+      "path": "res://assets/environments/autumn/boss-room.png"
+    },
+    {
+      "id": "winter-combat-room",
+      "stage": "winter",
+      "stageName": "静月根庭",
+      "roomType": "combat",
+      "path": "res://assets/environments/winter/combat-room.png"
+    },
+    {
+      "id": "winter-boss-room",
+      "stage": "winter",
+      "stageName": "静月根庭",
+      "roomType": "boss",
+      "path": "res://assets/environments/winter/boss-room.png"
+    }
+  ]
+}

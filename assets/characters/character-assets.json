@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "asset_type": "transparent_character_design_master",
+  "generation_mode": "built-in image_gen",
+  "style_reference": "res://assets/moonroot-title.png",
+  "source_background": "#ff00ff",
+  "final_background": "transparent",
+  "usage": "静态角色设计图、角色卡、图鉴和运行时占位贴图；不包含动画帧",
+  "assets": [
+    {
+      "id": "player_laiya",
+      "name": "莱芽",
+      "role": "player",
+      "biome": "all",
+      "path": "res://assets/characters/playable/laiya.png",
+      "recommended_display_size": [96, 96]
+    },
+    {
+      "id": "spring_mud_sprout",
+      "name": "泥团芽",
+      "role": "enemy",
+      "biome": "spring",
+      "path": "res://assets/characters/enemies/spring/mud-sprout.png",
+      "recommended_display_size": [48, 48]
+    },
+    {
+      "id": "spring_spike_radish",
+      "name": "刺萝卜",
+      "role": "enemy",
+      "biome": "spring",
+      "path": "res://assets/characters/enemies/spring/spike-radish.png",
+      "recommended_display_size": [52, 52]
+    },
+    {
+      "id": "spring_shell_bean_beetle",
+      "name": "壳豆虫",
+      "role": "enemy",
+      "biome": "spring",
+      "path": "res://assets/characters/enemies/spring/shell-bean-beetle.png",
+      "recommended_display_size": [56, 56]
+    },
+    {
+      "id": "spring_seed_thief_mouse",
+      "name": "偷苗鼠",
+      "role": "enemy",
+      "biome": "spring",
+      "path": "res://assets/characters/enemies/spring/seed-thief-mouse.png",
+      "recommended_display_size": [48, 48]
+    },
+    {
+      "id": "spring_moon_mushroom",
+      "name": "月菇伞",
+      "role": "enemy",
+      "biome": "spring",
+      "path": "res://assets/characters/enemies/spring/moon-mushroom.png",
+      "recommended_display_size": [52, 52]
+    },
+    {
+      "id": "spring_watering_can_spirit",
+      "name": "浇壶精",
+      "role": "enemy",
+      "biome": "spring",
+      "path": "res://assets/characters/enemies/spring/watering-can-spirit.png",
+      "recommended_display_size": [56, 56]
+    },
+    {
+      "id": "summer_pollen_scout_bee",
+      "name": "花粉侦蜂",
+      "role": "enemy",
+      "biome": "summer",
+      "path": "res://assets/characters/enemies/summer/pollen-scout-bee.png",
+      "recommended_display_size": [48, 48]
+    },
+    {
+      "id": "summer_beeswax_guard",
+      "name": "蜂蜡卫兵",
+      "role": "enemy",
+      "biome": "summer",
+      "path": "res://assets/characters/enemies/summer/beeswax-guard.png",
+      "recommended_display_size": [58, 58]
+    },
+    {
+      "id": "summer_bell_bloom",
+      "name": "铃蕊花",
+      "role": "enemy",
+      "biome": "summer",
+      "path": "res://assets/characters/enemies/summer/bell-bloom.png",
+      "recommended_display_size": [52, 52]
+    },
+    {
+      "id": "summer_glass_snail",
+      "name": "玻璃蜗牛",
+      "role": "enemy",
+      "biome": "summer",
+      "path": "res://assets/characters/enemies/summer/glass-snail.png",
+      "recommended_display_size": [54, 54]
+    },
+    {
+      "id": "summer_gardener_hornet",
+      "name": "园丁胡蜂",
+      "role": "enemy",
+      "biome": "summer",
+      "path": "res://assets/characters/enemies/summer/gardener-hornet.png",
+      "recommended_display_size": [56, 56]
+    },
+    {
+      "id": "summer_hive_worker",
+      "name": "育巢工蜂",
+      "role": "enemy",
+      "biome": "summer",
+      "path": "res://assets/characters/enemies/summer/hive-worker.png",
+      "recommended_display_size": [54, 54]
+    },
+    {
+      "id": "autumn_straw_spearman",
+      "name": "稻草枪兵",
+      "role": "enemy",
+      "biome": "autumn",
+      "path": "res://assets/characters/enemies/autumn/straw-spearman.png",
+      "recommended_display_size": [58, 58]
+    },
+    {
+      "id": "autumn_grain_moth",
+      "name": "谷蛾",
+      "role": "enemy",
+      "biome": "autumn",
+      "path": "res://assets/characters/enemies/autumn/grain-moth.png",
+      "recommended_display_size": [48, 48]
+    },
+    {
+      "id": "autumn_gear_mouse",
+      "name": "齿轮鼠",
+      "role": "enemy",
+      "biome": "autumn",
+      "path": "res://assets/characters/enemies/autumn/gear-mouse.png",
+      "recommended_display_size": [52, 52]
+    },
+    {
+      "id": "autumn_chaff_cannon_barrel",
+      "name": "糠炮桶",
+      "role": "enemy",
+      "biome": "autumn",
+      "path": "res://assets/characters/enemies/autumn/chaff-cannon-barrel.png",
+      "recommended_display_size": [58, 58]
+    },
+    {
+      "id": "autumn_broom_puppet",
+      "name": "扫帚傀儡",
+      "role": "enemy",
+      "biome": "autumn",
+      "path": "res://assets/characters/enemies/autumn/broom-puppet.png",
+      "recommended_display_size": [58, 58]
+    },
+    {
+      "id": "autumn_mill_shell_beast",
+      "name": "磨壳兽",
+      "role": "enemy",
+      "biome": "autumn",
+      "path": "res://assets/characters/enemies/autumn/mill-shell-beast.png",
+      "recommended_display_size": [64, 64]
+    },
+    {
+      "id": "winter_frost_bud",
+      "name": "霜芽团",
+      "role": "enemy",
+      "biome": "winter",
+      "path": "res://assets/characters/enemies/winter/frost-bud.png",
+      "recommended_display_size": [52, 52]
+    },
+    {
+      "id": "winter_moon_bell_attendant",
+      "name": "月铃侍",
+      "role": "enemy",
+      "biome": "winter",
+      "path": "res://assets/characters/enemies/winter/moon-bell-attendant.png",
+      "recommended_display_size": [54, 54]
+    },
+    {
+      "id": "winter_mirror_rabbit",
+      "name": "镜兔",
+      "role": "enemy",
+      "biome": "winter",
+      "path": "res://assets/characters/enemies/winter/mirror-rabbit.png",
+      "recommended_display_size": [50, 50]
+    },
+    {
+      "id": "winter_white_vine_guardian",
+      "name": "白藤守卫",
+      "role": "enemy",
+      "biome": "winter",
+      "path": "res://assets/characters/enemies/winter/white-vine-guardian.png",
+      "recommended_display_size": [62, 62]
+    },
+    {
+      "id": "winter_snow_shovel_puppet",
+      "name": "雪铲傀儡",
+      "role": "enemy",
+      "biome": "winter",
+      "path": "res://assets/characters/enemies/winter/snow-shovel-puppet.png",
+      "recommended_display_size": [56, 56]
+    },
+    {
+      "id": "winter_memory_spore",
+      "name": "忆孢体",
+      "role": "enemy",
+      "biome": "winter",
+      "path": "res://assets/characters/enemies/winter/memory-spore.png",
+      "recommended_display_size": [52, 52]
+    },
+    {
+      "id": "boss_lantern_pumpkin_king",
+      "name": "灯笼南瓜王",
+      "role": "boss",
+      "biome": "spring",
+      "path": "res://assets/characters/bosses/lantern-pumpkin-king.png",
+      "recommended_display_size": [144, 144]
+    },
+    {
+      "id": "boss_hive_mother_machine",
+      "name": "失控蜂箱母机",
+      "role": "boss",
+      "biome": "summer",
+      "path": "res://assets/characters/bosses/hive-mother-machine.png",
+      "recommended_display_size": [152, 152]
+    },
+    {
+      "id": "boss_harvest_colossus",
+      "name": "巨型收割傀儡",
+      "role": "boss",
+      "biome": "autumn",
+      "path": "res://assets/characters/bosses/harvest-colossus.png",
+      "recommended_display_size": [160, 160]
+    },
+    {
+      "id": "boss_inverted_moonroot_core",
+      "name": "倒生的月根之心",
+      "role": "boss",
+      "biome": "winter",
+      "path": "res://assets/characters/bosses/inverted-moonroot-core.png",
+      "recommended_display_size": [152, 152]
+    }
+  ]
+}
