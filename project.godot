@@ -11,6 +11,8 @@ config/icon="res://assets/moonroot-icon.svg"
 boot_splash/image="res://assets/moonroot-title.png"
 boot_splash/bg_color=Color(0.0549, 0.0863, 0.1569, 1)
 boot_splash/fullsize=false
+run/disable_stdout.release=true
+run/disable_stderr.release=true
 
 [display]
 
