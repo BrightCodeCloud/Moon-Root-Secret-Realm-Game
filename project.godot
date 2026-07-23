@@ -1,0 +1,44 @@
+; Engine configuration file.
+; Best edited using the editor once the project is opened.
+config_version=5
+
+[application]
+
+config/name="月根秘境"
+run/main_scene="res://Scenes/Main.tscn"
+config/features=PackedStringArray("4.7", "C#", "GL Compatibility")
+config/icon="res://assets/moonroot-icon.svg"
+boot_splash/image="res://assets/moonroot-title.png"
+boot_splash/bg_color=Color(0.0549, 0.0863, 0.1569, 1)
+boot_splash/fullsize=false
+
+[display]
+
+window/size/viewport_width=640
+window/size/viewport_height=360
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/size/resizable=true
+window/stretch/mode="viewport"
+window/stretch/aspect="keep"
+window/stretch/scale_mode="integer"
+
+[dotnet]
+
+project/assembly_name="Moonroot"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+textures/canvas_textures/default_texture_filter=0
+environment/defaults/default_clear_color=Color(0.0549, 0.0863, 0.1569, 1)
+
+[audio]
+
+driver/enable_input=false
+
+[debug]
+
+gdscript/warnings/unassigned_variable=0

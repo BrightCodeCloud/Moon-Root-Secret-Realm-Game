@@ -1,0 +1,28 @@
+# Godot generated files
+.godot/
+.mono/
+
+# .NET build output
+bin/
+obj/
+*.user
+*.suo
+
+# Local engine and downloaded tooling
+tools/
+
+# Exported builds and installer artifacts
+builds/
+dist/
+*.pck
+
+# Editor and operating-system noise
+.vs/
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+
+# Local logs and test captures
+logs/
+screenshots/
