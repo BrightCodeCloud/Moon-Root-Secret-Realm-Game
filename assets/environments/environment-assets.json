@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 1,
-  "assetType": "room-background-plate",
+  "schemaVersion": 2,
+  "assetType": "room-background-plate-and-production-reference",
   "generationMode": "built-in-imagegen",
   "dimensions": {
     "width": 1672,
@@ -27,6 +27,30 @@
       "stageName": "苔灯地窖",
       "roomType": "boss",
       "path": "res://assets/environments/spring/boss-room.png"
+    },
+    {
+      "id": "spring-shop-room",
+      "stage": "spring",
+      "stageName": "苔灯地窖",
+      "roomType": "shop",
+      "path": "res://assets/environments/spring/shop-room.png"
+    },
+    {
+      "id": "spring-greenhouse-room",
+      "stage": "spring",
+      "stageName": "苔灯地窖",
+      "roomType": "greenhouse",
+      "path": "res://assets/environments/spring/greenhouse-room.png"
+    },
+    {
+      "id": "spring-modular-tileset-reference",
+      "stage": "spring",
+      "stageName": "苔灯地窖",
+      "roomType": "production-reference",
+      "path": "res://assets/environments/spring/modular-tileset-reference.png",
+      "sourcePath": "res://assets/environments/spring/source/modular-tileset-reference-chroma.png",
+      "size": [1254, 1254],
+      "runtime": false
     },
     {
       "id": "summer-combat-room",

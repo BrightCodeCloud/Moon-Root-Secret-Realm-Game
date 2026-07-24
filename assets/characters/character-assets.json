@@ -1,11 +1,11 @@
 {
-  "schema_version": 1,
-  "asset_type": "transparent_character_design_master",
+  "schema_version": 2,
+  "asset_type": "character_design_master_and_production_reference",
   "generation_mode": "built-in image_gen",
   "style_reference": "res://assets/moonroot-title.png",
   "source_background": "#ff00ff",
-  "final_background": "transparent",
-  "usage": "静态角色设计图、角色卡、图鉴和运行时占位贴图；不包含动画帧",
+  "final_background": "transparent for character masters; opaque navy for production reference boards",
+  "usage": "静态角色设计图、角色卡、图鉴、运行时占位贴图与动画关键姿势参考；不包含固定网格动画帧",
   "assets": [
     {
       "id": "player_laiya",
@@ -30,6 +30,15 @@
       "biome": "spring",
       "path": "res://assets/characters/enemies/spring/spike-radish.png",
       "recommended_display_size": [52, 52]
+    },
+    {
+      "id": "spring_elite_moss_crowned_spike_radish",
+      "name": "苔冠刺萝卜",
+      "role": "elite_enemy",
+      "biome": "spring",
+      "path": "res://assets/characters/enemies/spring/moss-crowned-spike-radish.png",
+      "sourcePath": "res://assets/characters/enemies/spring/source/moss-crowned-spike-radish-chroma.png",
+      "recommended_display_size": [60, 60]
     },
     {
       "id": "spring_shell_bean_beetle",
@@ -238,6 +247,58 @@
       "biome": "winter",
       "path": "res://assets/characters/bosses/inverted-moonroot-core.png",
       "recommended_display_size": [152, 152]
+    },
+    {
+      "id": "camp_npc_moss_granny",
+      "name": "苔婆婆",
+      "role": "camp_npc",
+      "biome": "camp",
+      "path": "res://assets/characters/npcs/camp-npc-atlas.png",
+      "atlasCell": [0, 0],
+      "recommended_display_size": [96, 96]
+    },
+    {
+      "id": "camp_npc_ironbranch",
+      "name": "铁枝",
+      "role": "camp_npc",
+      "biome": "camp",
+      "path": "res://assets/characters/npcs/camp-npc-atlas.png",
+      "atlasCell": [1, 0],
+      "recommended_display_size": [104, 104]
+    },
+    {
+      "id": "camp_npc_doubao",
+      "name": "豆包",
+      "role": "camp_npc",
+      "biome": "camp",
+      "path": "res://assets/characters/npcs/camp-npc-atlas.png",
+      "atlasCell": [0, 1],
+      "recommended_display_size": [96, 96]
+    },
+    {
+      "id": "camp_npc_well_echo",
+      "name": "井底回声",
+      "role": "camp_npc",
+      "biome": "camp",
+      "path": "res://assets/characters/npcs/camp-npc-atlas.png",
+      "atlasCell": [1, 1],
+      "recommended_display_size": [96, 96]
+    },
+    {
+      "id": "spring_animation_key_pose_reference",
+      "name": "春季角色动画关键姿势参考",
+      "role": "production_reference",
+      "biome": "spring",
+      "path": "res://assets/characters/production/spring-animation-key-pose-reference.png",
+      "runtime": false
+    },
+    {
+      "id": "boss_lantern_pumpkin_king_key_pose_reference",
+      "name": "灯笼南瓜王动画关键姿势参考",
+      "role": "production_reference",
+      "biome": "spring",
+      "path": "res://assets/characters/production/lantern-pumpkin-king-key-pose-reference.png",
+      "runtime": false
     }
   ]
 }

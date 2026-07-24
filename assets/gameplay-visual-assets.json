@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "generationMode": "built-in-imagegen-with-local-chroma-key-removal",
   "style": "handcrafted-16-bit-top-down-pixel-art",
   "importDefaults": {
@@ -243,6 +243,122 @@
       "layout": {
         "rows": ["ice-spikes", "mirror-relay", "falling-icicle", "freeze-seal"],
         "columns": ["off", "warning", "active", "cooldown"]
+      }
+    },
+    {
+      "id": "moonroot-network-map-reference",
+      "category": "ui-mockup",
+      "path": "res://assets/ui/mockups/moonroot-network-map-reference.png",
+      "size": [1672, 941],
+      "alpha": false,
+      "runtime": false,
+      "content": "月根网络地图、天气预报、生态配方和收割/留根选择布局参考"
+    },
+    {
+      "id": "run-records-leaderboard-reference",
+      "category": "ui-mockup",
+      "path": "res://assets/ui/mockups/run-records-leaderboard-reference.png",
+      "size": [1672, 941],
+      "alpha": false,
+      "runtime": false,
+      "content": "本地排行榜和单局详情布局参考"
+    },
+    {
+      "id": "continue-difficulty-reference",
+      "category": "ui-mockup",
+      "path": "res://assets/ui/mockups/continue-difficulty-reference.png",
+      "size": [1672, 941],
+      "alpha": false,
+      "runtime": false,
+      "content": "继续游戏摘要、新游戏与三档难度选择布局参考"
+    },
+    {
+      "id": "moonroot-network-ui-atlas",
+      "category": "ui-icons",
+      "path": "res://assets/ui/moonroot-network-ui-atlas.png",
+      "sourcePath": "res://assets/ui/source/moonroot-network-ui-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": 4,
+        "columns": 4,
+        "order": [
+          ["wet", "burning", "spore", "rooted"],
+          ["moonlit", "corrupted", "harvest", "attached"],
+          ["node-inactive", "node-active", "node-corrupted", "season-seed-node"],
+          ["weather-rain", "weather-moonlight", "root-junction", "boss-inheritance-warning"]
+        ]
+      }
+    },
+    {
+      "id": "challenge-status-atlas",
+      "category": "ui-icons",
+      "path": "res://assets/ui/challenge-status-atlas.png",
+      "sourcePath": "res://assets/ui/source/challenge-status-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": 4,
+        "columns": 4,
+        "order": [
+          ["difficulty-easy", "difficulty-normal", "difficulty-hard", "score"],
+          ["contract-swarm", "contract-drought", "contract-no-roll", "contract-corrupted-soil"],
+          ["contract-elite-pollination", "no-hit", "zero-root", "network-complete"],
+          ["safe-save", "continue", "combat-interruption", "replay-disqualified"]
+        ]
+      }
+    },
+    {
+      "id": "spring-seed-growth-atlas",
+      "category": "combat-plants",
+      "path": "res://assets/plants/spring-seed-growth-atlas.png",
+      "sourcePath": "res://assets/plants/source/spring-seed-growth-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["pea", "chili", "pumpkin", "dandelion"],
+        "columns": ["seed", "sprout", "half-grown", "mature"]
+      }
+    },
+    {
+      "id": "spring-weapon-atlas",
+      "category": "weapons",
+      "path": "res://assets/weapons/spring-weapon-atlas.png",
+      "sourcePath": "res://assets/weapons/source/spring-weapon-atlas-chroma.png",
+      "size": [1448, 1086],
+      "alpha": true,
+      "layout": {
+        "rows": ["sprout-staff", "crescent-sickle", "sun-prism-watering-can"],
+        "columns": ["down", "left", "up", "right"]
+      }
+    },
+    {
+      "id": "spring-relic-icons-atlas",
+      "category": "relic-icons",
+      "path": "res://assets/items/spring-relic-icons-atlas.png",
+      "sourcePath": "res://assets/items/source/spring-relic-icons-atlas-chroma.png",
+      "size": [1448, 1086],
+      "alpha": true,
+      "layout": {
+        "rows": 3,
+        "columns": 4,
+        "order": [
+          ["rain-pod", "old-copper-nozzle", "warm-hand-stone", "hollow-pumpkin-stem"],
+          ["snail-clock", "three-prong-rake", "moonlit-glass-bottle", "waterproof-boots"],
+          ["gardener-note", "golden-rice-husk", "double-moon-seed-tray", "upside-down-flowerpot"]
+        ]
+      }
+    },
+    {
+      "id": "ecology-vfx-atlas",
+      "category": "ecology-feedback",
+      "path": "res://assets/vfx/ecology/ecology-vfx-atlas.png",
+      "sourcePath": "res://assets/vfx/ecology/source/ecology-vfx-atlas-chroma.png",
+      "size": [1254, 1254],
+      "alpha": true,
+      "layout": {
+        "rows": ["seed-landing", "maturity-pop", "harvest-burst", "root-propagation"],
+        "columns": ["start", "forming", "peak", "fade"]
       }
     }
   ]
