@@ -9,6 +9,9 @@ public partial class Main : Node2D
 {
     private const float Width = 640f;
     private const float Height = 360f;
+    private const float MusicBaseVolumeDb = -12f;
+    private const float MusicSilentVolumeDb = -60f;
+    private const float MusicCrossfadeSeconds = 0.8f;
     private static readonly Rect2 Arena = new(38, 48, 564, 280);
 
     private enum RunState { Title, Playing, Upgrade, Paused, GameOver, Victory }
@@ -88,7 +91,9 @@ public partial class Main : Node2D
     private readonly List<(Vector2 Position, int Kind)> _decor = [];
     private readonly List<Upgrade> _upgradeChoices = [];
     private readonly List<AudioStreamPlayer> _audioPlayers = [];
+    private readonly List<AudioStreamPlayer> _musicPlayers = [];
     private readonly Dictionary<string, AudioStreamWav> _sounds = [];
+    private readonly Dictionary<string, (AudioStream Stream, float GainDb)> _musicTracks = [];
     private readonly RandomNumberGenerator _rng = new();
 
     private RunState _state = RunState.Title;
@@ -132,6 +137,12 @@ public partial class Main : Node2D
     private int _hoveredCard = -1;
     private bool _usingControllerAim;
     private int _audioCursor;
+    private int _activeMusicIndex = -1;
+    private int _fadingMusicIndex = -1;
+    private float _musicFadeElapsed;
+    private float _musicFadeInTargetDb = MusicBaseVolumeDb;
+    private float _musicFadeOutStartDb = MusicBaseVolumeDb;
+    private string _currentMusic = "";
     private bool _smokeTest;
     private float _smokeTestTimer;
     private float _smokeShotTimer;
@@ -187,6 +198,7 @@ public partial class Main : Node2D
     {
         float dt = Math.Min((float)delta, 0.033f);
         _time += dt;
+        UpdateMusic(dt);
 
         if (_toastTimer > 0) _toastTimer -= dt;
         if (_screenShake > 0) _screenShake = Math.Max(0, _screenShake - dt * 18f);
@@ -399,6 +411,8 @@ public partial class Main : Node2D
         {
             SpawnEnemy(EnemyKind.Boss, new Vector2(320, 120));
         }
+
+        PlayMusic(_room >= 5 ? "boss" : "spring");
     }
 
     private void GenerateDecor()
@@ -638,6 +652,7 @@ public partial class Main : Node2D
             {
                 _state = RunState.Victory;
                 Input.MouseMode = Input.MouseModeEnum.Visible;
+                PlayMusic("menu");
             }
             else
             {
@@ -937,6 +952,7 @@ public partial class Main : Node2D
             _playerHealth = 0;
             _state = RunState.GameOver;
             Input.MouseMode = Input.MouseModeEnum.Visible;
+            PlayMusic("menu");
         }
     }
 
@@ -1081,11 +1097,21 @@ public partial class Main : Node2D
 
     private void InitializeAudio()
     {
+        EnsureAudioBus("Music");
+        EnsureAudioBus("SFX");
+
         for (int i = 0; i < 8; i++)
         {
-            AudioStreamPlayer player = new() { VolumeDb = -9f };
+            AudioStreamPlayer player = new() { Bus = "SFX", VolumeDb = -9f };
             AddChild(player);
             _audioPlayers.Add(player);
+        }
+
+        for (int i = 0; i < 2; i++)
+        {
+            AudioStreamPlayer player = new() { Bus = "Music", VolumeDb = MusicSilentVolumeDb };
+            AddChild(player);
+            _musicPlayers.Add(player);
         }
 
         _sounds["shoot"] = CreateTone(510, 0.045f, 0.22f, 1.8f);
@@ -1096,6 +1122,80 @@ public partial class Main : Node2D
         _sounds["hurt"] = CreateTone(105, 0.16f, 0.35f, 0.7f);
         _sounds["clear"] = CreateTone(420, 0.28f, 0.26f, 2f);
         _sounds["upgrade"] = CreateTone(540, 0.24f, 0.28f, 1.52f);
+
+        LoadMusic("menu", "res://assets/audio/music/menu.ogg", 0f);
+        LoadMusic("spring", "res://assets/audio/music/spring.ogg", 1f);
+        LoadMusic("boss", "res://assets/audio/music/boss.ogg", -7.5f);
+        PlayMusic("menu");
+    }
+
+    private static void EnsureAudioBus(StringName busName)
+    {
+        if (AudioServer.GetBusIndex(busName) >= 0) return;
+        AudioServer.AddBus();
+        AudioServer.SetBusName(AudioServer.BusCount - 1, busName);
+    }
+
+    private void LoadMusic(string id, string path, float gainDb)
+    {
+        AudioStream? stream = GD.Load<AudioStream>(path);
+        if (stream == null)
+        {
+            GD.PushWarning($"Music stream could not be loaded: {path}");
+            return;
+        }
+
+        if (stream is AudioStreamOggVorbis ogg)
+            ogg.Loop = true;
+
+        _musicTracks[id] = (stream, gainDb);
+    }
+
+    private void PlayMusic(string id)
+    {
+        if (!_musicTracks.TryGetValue(id, out (AudioStream Stream, float GainDb) track) || _musicPlayers.Count == 0)
+            return;
+
+        if (_currentMusic == id && _activeMusicIndex >= 0 && _musicPlayers[_activeMusicIndex].Playing)
+            return;
+
+        int nextIndex = _activeMusicIndex < 0 ? 0 : (_activeMusicIndex + 1) % _musicPlayers.Count;
+        AudioStreamPlayer next = _musicPlayers[nextIndex];
+        next.Stop();
+        next.Stream = track.Stream;
+        next.VolumeDb = MusicSilentVolumeDb;
+        next.Play();
+
+        _fadingMusicIndex = _activeMusicIndex;
+        _musicFadeOutStartDb = _fadingMusicIndex >= 0
+            ? _musicPlayers[_fadingMusicIndex].VolumeDb
+            : MusicSilentVolumeDb;
+        _activeMusicIndex = nextIndex;
+        _musicFadeInTargetDb = MusicBaseVolumeDb + track.GainDb;
+        _musicFadeElapsed = 0f;
+        _currentMusic = id;
+    }
+
+    private void UpdateMusic(float dt)
+    {
+        if (_activeMusicIndex < 0 || _musicPlayers.Count == 0) return;
+
+        _musicFadeElapsed += dt;
+        float t = Mathf.Clamp(_musicFadeElapsed / MusicCrossfadeSeconds, 0f, 1f);
+        float eased = t * t * (3f - 2f * t);
+        _musicPlayers[_activeMusicIndex].VolumeDb =
+            Mathf.Lerp(MusicSilentVolumeDb, _musicFadeInTargetDb, eased);
+
+        if (_fadingMusicIndex >= 0)
+        {
+            AudioStreamPlayer fading = _musicPlayers[_fadingMusicIndex];
+            fading.VolumeDb = Mathf.Lerp(_musicFadeOutStartDb, MusicSilentVolumeDb, eased);
+            if (t >= 1f)
+            {
+                fading.Stop();
+                _fadingMusicIndex = -1;
+            }
+        }
     }
 
     private static AudioStreamWav CreateTone(float frequency, float duration, float volume, float endPitch)
