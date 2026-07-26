@@ -5,6 +5,7 @@ config_version=5
 [application]
 
 config/name="月根秘境"
+config/version="1.0.0"
 run/main_scene="res://Scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "C#", "GL Compatibility")
 config/icon="res://assets/moonroot-icon.svg"
@@ -16,10 +17,10 @@ run/disable_stderr.release=true
 
 [display]
 
-window/size/viewport_width=640
-window/size/viewport_height=360
-window/size/window_width_override=1280
-window/size/window_height_override=720
+window/size/viewport_width=480
+window/size/viewport_height=270
+window/size/window_width_override=960
+window/size/window_height_override=540
 window/size/resizable=true
 window/stretch/mode="viewport"
 window/stretch/aspect="keep"

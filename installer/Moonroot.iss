@@ -1,6 +1,6 @@
 #define MyAppName "月根秘境"
 #define MyAppEnglishName "Moonroot Hollow"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "1.0.0"
 #define MyAppPublisher "BrightCodeCloud"
 #define MyAppExeName "Moonroot.exe"
 
@@ -22,7 +22,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayName={#MyAppName}
-VersionInfoVersion=0.1.0.0
+VersionInfoVersion=1.0.0.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppEnglishName} installer
 CloseApplications=yes

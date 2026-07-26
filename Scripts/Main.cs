@@ -7,29 +7,21 @@ namespace Moonroot;
 
 public partial class Main : Node2D
 {
-    private const float Width = 640f;
-    private const float Height = 360f;
-    private const float MusicBaseVolumeDb = -12f;
-    private const float MusicSilentVolumeDb = -60f;
-    private const float MusicCrossfadeSeconds = 0.8f;
-    private static readonly Rect2 Arena = new(38, 48, 564, 280);
-
-    private enum RunState { Title, Playing, Upgrade, Paused, GameOver, Victory }
-    private enum EnemyKind { Sprout, Radish, Beetle, Boss }
-    private enum PickupKind { MoonDew, SeedPod, Heart }
+    private const float Width = 480;
+    private const float Height = 270;
+    private static readonly Rect2 Arena = new(28, 35, 424, 205);
 
     private sealed class Enemy
     {
-        public EnemyKind Kind;
+        public EnemyType Type;
         public Vector2 Position;
         public Vector2 Velocity;
         public float Health;
         public float MaxHealth;
         public float AttackTimer;
         public float StateTimer;
-        public float Flash;
         public float Phase;
-        public Vector2 LockedDirection;
+        public float Flash;
         public bool Charging;
     }
 
@@ -40,157 +32,176 @@ public partial class Main : Node2D
         public float Damage;
         public float Life;
         public float Radius;
-        public int Pierce;
+        public int AtlasIndex;
         public bool Friendly;
-        public Color Color;
+        public bool Homing;
+        public bool Heavy;
     }
 
     private sealed class Plant
     {
+        public SeedType Type;
         public Vector2 Position;
         public float Growth;
         public float Age;
-        public float ShootTimer;
-        public float Pulse;
+        public float AttackTimer;
         public bool Mature;
+    }
+
+    private sealed class SoilPatch
+    {
+        public SoilType Type;
+        public Vector2 Position;
+        public float Radius;
     }
 
     private sealed class Pickup
     {
-        public PickupKind Kind;
+        public int AtlasIndex;
         public Vector2 Position;
-        public Vector2 Velocity;
-        public float Life;
+        public float Life = 12;
     }
 
-    private sealed class Particle
+    private sealed class Fx
     {
+        public string Atlas = "atlas.impacts";
+        public int Row;
         public Vector2 Position;
-        public Vector2 Velocity;
-        public float Life;
-        public float MaxLife;
-        public float Size;
-        public Color Color;
+        public float Life = 0.35f;
+        public float MaxLife = 0.35f;
+        public float Size = 34;
     }
 
-    private sealed class WetPatch
+    private sealed class Trap
     {
+        public int Kind;
         public Vector2 Position;
-        public float Radius;
-        public float Life;
+        public float Phase;
+        public float Cooldown;
     }
 
-    private readonly record struct Upgrade(string Id, string Name, string Description, string Tag);
-
+    private readonly RuntimeAssets _assets = new();
+    private readonly RandomNumberGenerator _rng = new();
     private readonly List<Enemy> _enemies = [];
     private readonly List<Projectile> _projectiles = [];
     private readonly List<Plant> _plants = [];
+    private readonly List<SoilPatch> _soil = [];
     private readonly List<Pickup> _pickups = [];
-    private readonly List<Particle> _particles = [];
-    private readonly List<WetPatch> _wetPatches = [];
-    private readonly List<(Vector2 Position, int Kind)> _decor = [];
-    private readonly List<Upgrade> _upgradeChoices = [];
-    private readonly List<AudioStreamPlayer> _audioPlayers = [];
-    private readonly List<AudioStreamPlayer> _musicPlayers = [];
-    private readonly Dictionary<string, AudioStreamWav> _sounds = [];
-    private readonly Dictionary<string, (AudioStream Stream, float GainDb)> _musicTracks = [];
-    private readonly RandomNumberGenerator _rng = new();
+    private readonly List<Fx> _effects = [];
+    private readonly List<Trap> _traps = [];
+    private readonly HashSet<string> _relics = [];
+    private readonly HashSet<string> _recipes = [];
 
-    private RunState _state = RunState.Title;
-    private Texture2D? _titleTexture;
+    private GameScreen _screen = GameScreen.Title;
+    private DesignMap _map = new();
     private Font? _font;
-
-    private Vector2 _playerPosition = new(320, 278);
-    private Vector2 _playerVelocity;
-    private Vector2 _aimDirection = Vector2.Up;
-    private Vector2 _rollDirection = Vector2.Up;
+    private AudioStreamPlayer? _music;
+    private ulong _runSeed;
+    private float _time;
+    private float _playTime;
     private float _playerHealth = 6;
     private float _playerMaxHealth = 6;
+    private Vector2 _playerPosition = new(240, 185);
+    private Vector2 _playerVelocity;
+    private Vector2 _aimDirection = Vector2.Right;
     private float _invulnerability;
-    private float _shotCooldown;
-    private float _rollCooldown;
     private float _rollTime;
+    private float _rollCooldown;
+    private float _attackCooldown;
     private float _dewCooldown;
+    private float _weaponHeat;
+    private float _weaponEffect;
     private int _seedPods = 3;
     private int _maxSeedPods = 3;
     private int _moonDew;
-
-    private float _damageMultiplier = 1f;
-    private float _fireRateMultiplier = 1f;
-    private float _moveSpeedMultiplier = 1f;
-    private float _plantRateMultiplier = 1f;
-    private float _growthMultiplier = 1f;
-    private float _harvestMultiplier = 1f;
-    private float _dewCooldownMultiplier = 1f;
-    private int _bulletPierce;
-
-    private int _room = 1;
-    private ulong _runSeed;
+    private int _seasonLeaves;
+    private int _difficulty = 1;
+    private int _routeIndex;
+    private int _choiceIndex;
+    private int _roomsCleared;
+    private int _score;
+    private int _combatRoomsScored;
+    private int _roomPlantsPlaced;
+    private int _roomPlantsMatured;
+    private int _roomHarvested;
+    private int _roomRootsLeft;
+    private int _roomDamageTaken;
     private bool _roomClear;
-    private float _clearTimer;
-    private float _roomIntroTimer;
-    private float _screenShake;
-    private float _hurtVignette;
-    private float _time;
-    private float _toastTimer;
-    private string _toast = "";
-    private int _hoveredCard = -1;
-    private bool _usingControllerAim;
-    private int _audioCursor;
-    private int _activeMusicIndex = -1;
-    private int _fadingMusicIndex = -1;
-    private float _musicFadeElapsed;
-    private float _musicFadeInTargetDb = MusicBaseVolumeDb;
-    private float _musicFadeOutStartDb = MusicBaseVolumeDb;
-    private string _currentMusic = "";
-    private bool _smokeTest;
-    private float _smokeTestTimer;
-    private float _smokeShotTimer;
+    private bool _roomRewardPending;
+    private bool _roomFirstHarvest;
+    private bool _bossDefeated;
+    private WeaponType _weapon = WeaponType.SproutStaff;
+    private SeedType _seed = SeedType.Pea;
+    private string _message = "";
+    private float _messageTimer;
+    private string _contract = "";
+    private string _capturePath = "";
+    private string _captureScene = "battle";
+    private bool _automation;
+    private float _automationTimer;
 
-    private static readonly Color Deep = Color.FromHtml("#0e1628");
-    private static readonly Color DeepBlue = Color.FromHtml("#1d2d44");
-    private static readonly Color MoonBlue = Color.FromHtml("#2f5572");
-    private static readonly Color Moss = Color.FromHtml("#496b3b");
-    private static readonly Color SproutGreen = Color.FromHtml("#88b84b");
-    private static readonly Color Soil = Color.FromHtml("#6b4632");
-    private static readonly Color Wood = Color.FromHtml("#9a6139");
-    private static readonly Color Honey = Color.FromHtml("#e6a84a");
-    private static readonly Color Pumpkin = Color.FromHtml("#d96832");
-    private static readonly Color HealthRed = Color.FromHtml("#c84c4c");
-    private static readonly Color MoonCyan = Color.FromHtml("#3bc6c4");
-    private static readonly Color Parchment = Color.FromHtml("#f3deb3");
+    private static readonly Color Deep = Color.FromHtml("#0E1628");
+    private static readonly Color DeepBlue = Color.FromHtml("#1D2D44");
+    private static readonly Color Moss = Color.FromHtml("#496B3B");
+    private static readonly Color Sprout = Color.FromHtml("#88B84B");
+    private static readonly Color SoilBrown = Color.FromHtml("#6B4632");
+    private static readonly Color Wood = Color.FromHtml("#9A6139");
+    private static readonly Color Honey = Color.FromHtml("#E6A84A");
+    private static readonly Color Pumpkin = Color.FromHtml("#D96832");
+    private static readonly Color Health = Color.FromHtml("#C84C4C");
+    private static readonly Color Cyan = Color.FromHtml("#3BC6C4");
+    private static readonly Color Parchment = Color.FromHtml("#F3DEB3");
+    private static readonly Color MoonViolet = Color.FromHtml("#9C79D6");
 
-    private readonly Upgrade[] _upgradePool =
-    [
-        new("damage", "饱满豆荚", "芽弹与植物伤害提高 25%", "攻击"),
-        new("firerate", "晨风细枝", "主工具攻击速度提高 22%", "攻速"),
-        new("speed", "不沾泥的靴子", "移动速度提高 14%", "移动"),
-        new("heart", "心莓果酱", "生命上限增加 2，并恢复 2 点", "生存"),
-        new("seeds", "双层种袋", "种荚上限增加 1，并立刻补满", "种植"),
-        new("plant", "雨后豆荚", "成熟植物攻击速度提高 30%", "植物"),
-        new("growth", "蜗牛时钟", "植物成长速度提高 25%", "生长"),
-        new("harvest", "三齿小耙", "收割爆发范围与伤害提高 30%", "收割"),
-        new("dew", "旧铜喷头", "晨露圈冷却缩短 25%", "湿润"),
-        new("pierce", "金色稻壳", "芽弹额外穿透 1 个敌人", "穿透")
-    ];
+    private DesignRoom CurrentRoom => _map.Current;
+    private bool IsCombatRoom => CurrentRoom.Type is RoomType.Combat or RoomType.Elite or RoomType.Boss;
 
     public override void _Ready()
     {
-        _titleTexture = GD.Load<Texture2D>("res://assets/moonroot-title.png");
+        _assets.LoadAll();
         _font = ThemeDB.FallbackFont;
-        InitializeAudio();
-        DisplayServer.WindowSetTitle("月根秘境 · Moonroot Hollow");
-        Input.MouseMode = Input.MouseModeEnum.Visible;
-        SetProcess(true);
-        _smokeTest = OS.GetCmdlineUserArgs().Contains("--smoke-test");
-        if (_smokeTest)
+        DisplayServer.WindowSetTitle("月根秘境 · 春季垂直切片");
+        InitializeMusic();
+        PlayMusic("res://assets/audio/music/menu.ogg");
+
+        string[] args = OS.GetCmdlineUserArgs();
+        _automation = args.Contains("--design-smoke-test");
+        string? captureArg = args.FirstOrDefault(arg => arg.StartsWith("--capture=", StringComparison.Ordinal));
+        if (captureArg != null)
+            _capturePath = captureArg["--capture=".Length..];
+        string? captureSceneArg = args.FirstOrDefault(arg => arg.StartsWith("--capture-scene=", StringComparison.Ordinal));
+        if (captureSceneArg != null)
+            _captureScene = captureSceneArg["--capture-scene=".Length..];
+
+        if (_automation || !string.IsNullOrEmpty(_capturePath))
         {
-            StartRun();
-            _playerMaxHealth = 1000;
-            _playerHealth = 1000;
-            TryPlant(_playerPosition + new Vector2(38, -46));
-            UseDewRing();
+            _weapon = WeaponType.SproutStaff;
+            _seed = SeedType.Pea;
+            if (_captureScene == "loadout")
+            {
+                _screen = GameScreen.Loadout;
+            }
+            else
+            {
+                BeginRun();
+                EnterRoom(_captureScene == "boss" ? 8 : 1);
+                _playerHealth = 1000;
+                _playerMaxHealth = 1000;
+                AddPlant(SeedType.Pea, new Vector2(180, 170), true);
+                AddPlant(SeedType.Pumpkin, new Vector2(305, 168), true);
+                if (_captureScene == "map")
+                {
+                    foreach (DesignRoom room in _map.Rooms)
+                        room.Discovered = true;
+                    _map.Room(1).RootTag = RootTag.Wet;
+                    _map.Room(2).RootTag = RootTag.Spore;
+                    _map.Room(3).RootTag = RootTag.Attached;
+                    _map.Room(8).BossRevealed = true;
+                    OpenMap();
+                }
+            }
         }
+
         QueueRedraw();
     }
 
@@ -198,1490 +209,1742 @@ public partial class Main : Node2D
     {
         float dt = Math.Min((float)delta, 0.033f);
         _time += dt;
-        UpdateMusic(dt);
+        if (_messageTimer > 0) _messageTimer -= dt;
+        if (_weaponEffect > 0) _weaponEffect -= dt;
 
-        if (_toastTimer > 0) _toastTimer -= dt;
-        if (_screenShake > 0) _screenShake = Math.Max(0, _screenShake - dt * 18f);
-        if (_hurtVignette > 0) _hurtVignette = Math.Max(0, _hurtVignette - dt * 2.4f);
+        if (_screen == GameScreen.Playing)
+        {
+            _playTime += dt;
+            UpdateWorld(dt);
+        }
 
-        if (_state == RunState.Playing)
-            UpdateGame(dt);
+        if (_automation)
+            UpdateAutomation(dt);
 
-        if (_smokeTest)
-            UpdateSmokeTest(dt);
-
-        if (_state == RunState.Upgrade)
-            UpdateUpgradeHover();
+        if (!string.IsNullOrEmpty(_capturePath))
+        {
+            _automationTimer += dt;
+            if (_automationTimer > 1.2f)
+            {
+                Error result;
+                try
+                {
+                    Image? frame = GetViewport().GetTexture()?.GetImage();
+                    result = frame == null || frame.IsEmpty() ? Error.Unavailable : frame.SavePng(_capturePath);
+                }
+                catch (Exception exception)
+                {
+                    GD.PushError($"Visual capture unavailable: {exception.Message}");
+                    result = Error.Unavailable;
+                }
+                GD.Print(result == Error.Ok ? $"VISUAL_CAPTURE_OK path={_capturePath}" : $"VISUAL_CAPTURE_FAILED error={result}");
+                _capturePath = "";
+                GetTree().Quit(result == Error.Ok ? 0 : 1);
+            }
+        }
 
         QueueRedraw();
-    }
-
-    private void UpdateSmokeTest(float dt)
-    {
-        _smokeTestTimer += dt;
-        _smokeShotTimer -= dt;
-        _invulnerability = 1f;
-
-        if (_state == RunState.Playing && _enemies.Count > 0 && _smokeShotTimer <= 0)
-        {
-            Enemy target = _enemies.OrderBy(e => e.Position.DistanceSquaredTo(_playerPosition)).First();
-            _aimDirection = _playerPosition.DirectionTo(target.Position);
-            ShootPlayerProjectile();
-            _smokeShotTimer = 0.12f;
-        }
-
-        if (_roomClear && _clearTimer > 0.65f && _room < 5)
-        {
-            OpenUpgradeChoice();
-            ChooseUpgrade(0);
-        }
-
-        if (_smokeTestTimer >= 12f)
-        {
-            GD.Print($"SMOKE_TEST_OK room={_room} state={_state} enemies={_enemies.Count} plants={_plants.Count} dew={_moonDew}");
-            GetTree().Quit(0);
-            _smokeTest = false;
-        }
     }
 
     public override void _Input(InputEvent @event)
     {
         if (@event is InputEventMouseMotion)
-            _usingControllerAim = false;
+            UpdateAimFromMouse();
 
         if (@event is InputEventMouseButton mouse && mouse.Pressed)
         {
-            if (mouse.ButtonIndex == MouseButton.Left)
-                HandlePrimaryClick(mouse.Position);
-            else if (mouse.ButtonIndex == MouseButton.Right && _state == RunState.Playing)
+            if (_screen == GameScreen.Playing && mouse.ButtonIndex == MouseButton.Right)
                 TryPlant(GetLocalMousePosition());
+            else if (mouse.ButtonIndex == MouseButton.Left)
+                HandleClick(mouse.Position);
+            else if (_screen == GameScreen.Playing && mouse.ButtonIndex == MouseButton.WheelUp)
+                CycleSeed(-1);
+            else if (_screen == GameScreen.Playing && mouse.ButtonIndex == MouseButton.WheelDown)
+                CycleSeed(1);
         }
 
-        if (@event is InputEventKey key && key.Pressed && !key.Echo)
+        if (@event is not InputEventKey key || !key.Pressed || key.Echo) return;
+
+        if (_screen == GameScreen.Title)
         {
             if (key.Keycode is Key.Enter or Key.KpEnter)
-            {
-                if (_state == RunState.Title || _state is RunState.GameOver or RunState.Victory)
-                    StartRun();
-            }
-            else if (key.Keycode == Key.Escape)
-            {
-                TogglePause();
-            }
-            else if (key.Keycode == Key.Space && _state == RunState.Playing)
-            {
-                TryRoll();
-            }
-            else if (key.Keycode == Key.E && _state == RunState.Playing)
-            {
-                TryInteract();
-            }
-            else if (key.Keycode == Key.Q && _state == RunState.Playing)
-            {
-                UseDewRing();
-            }
-            else if (_state == RunState.Upgrade)
-            {
-                if (key.Keycode == Key.Key1) ChooseUpgrade(0);
-                if (key.Keycode == Key.Key2) ChooseUpgrade(1);
-                if (key.Keycode == Key.Key3) ChooseUpgrade(2);
-            }
-        }
-
-        if (@event is InputEventJoypadButton joy && joy.Pressed)
-        {
-            _usingControllerAim = true;
-            if (joy.ButtonIndex == JoyButton.Start) TogglePause();
-            if (_state == RunState.Title && joy.ButtonIndex == JoyButton.A) StartRun();
-            else if (_state == RunState.Playing)
-            {
-                if (joy.ButtonIndex == JoyButton.A) TryRoll();
-                if (joy.ButtonIndex == JoyButton.X) TryInteract();
-                if (joy.ButtonIndex == JoyButton.Y) UseDewRing();
-                if (joy.ButtonIndex == JoyButton.LeftShoulder) TryPlant(_playerPosition + _aimDirection * 44f);
-            }
-            else if (_state == RunState.Upgrade)
-            {
-                if (joy.ButtonIndex == JoyButton.DpadLeft) _hoveredCard = Math.Max(0, _hoveredCard - 1);
-                if (joy.ButtonIndex == JoyButton.DpadRight) _hoveredCard = Math.Min(2, Math.Max(0, _hoveredCard) + 1);
-                if (joy.ButtonIndex == JoyButton.A) ChooseUpgrade(Math.Max(0, _hoveredCard));
-            }
-            else if (_state is RunState.GameOver or RunState.Victory && joy.ButtonIndex == JoyButton.A)
-            {
-                StartRun();
-            }
-        }
-    }
-
-    private void HandlePrimaryClick(Vector2 mousePosition)
-    {
-        if (_state == RunState.Title)
-        {
-            if (new Rect2(236, 248, 168, 38).HasPoint(mousePosition))
-                StartRun();
+                _screen = GameScreen.Loadout;
+            if (key.Keycode == Key.Escape) GetTree().Quit();
             return;
         }
 
-        if (_state == RunState.Upgrade)
+        if (_screen == GameScreen.Loadout)
         {
-            for (int i = 0; i < 3; i++)
-            {
-                if (CardRect(i).HasPoint(mousePosition))
-                {
-                    ChooseUpgrade(i);
-                    return;
-                }
-            }
+            if (key.Keycode is Key.Left or Key.A) CycleWeapon(-1);
+            if (key.Keycode is Key.Right or Key.D) CycleWeapon(1);
+            if (key.Keycode is Key.Up or Key.W) CycleSeed(-1);
+            if (key.Keycode is Key.Down or Key.S) CycleSeed(1);
+            if (key.Keycode == Key.K) _difficulty = Wrap(_difficulty + 1, 3);
+            if (key.Keycode is Key.Enter or Key.KpEnter) BeginRun();
+            if (key.Keycode == Key.Escape) _screen = GameScreen.Title;
+            return;
         }
 
-        if (_state == RunState.Paused && new Rect2(246, 231, 148, 32).HasPoint(mousePosition))
-            TogglePause();
-        else if (_state is RunState.GameOver or RunState.Victory && new Rect2(235, 255, 170, 34).HasPoint(mousePosition))
-            StartRun();
+        if (key.Keycode == Key.Escape)
+        {
+            if (_screen == GameScreen.Playing) _screen = GameScreen.Pause;
+            else if (_screen == GameScreen.Pause) _screen = GameScreen.Playing;
+            else if (_screen == GameScreen.Map) _screen = GameScreen.Playing;
+            else _screen = GameScreen.Map;
+            return;
+        }
+
+        if (_screen == GameScreen.Playing)
+        {
+            if (key.Keycode == Key.Space) TryRoll();
+            if (key.Keycode == Key.Q) UseDewRing();
+            if (key.Keycode == Key.Tab) OpenMap();
+            if (key.Keycode == Key.E && _roomClear) ResolveRoomExit();
+            if (key.Keycode == Key.R) CycleWeapon(1);
+            if (key.Keycode is >= Key.Key1 and <= Key.Key4)
+                _seed = (SeedType)((int)key.Keycode - (int)Key.Key1);
+            return;
+        }
+
+        if (_screen == GameScreen.Map)
+        {
+            List<DesignRoom> routes = TravelOptions();
+            if (key.Keycode is Key.Left or Key.A) _routeIndex = Wrap(_routeIndex - 1, routes.Count);
+            if (key.Keycode is Key.Right or Key.D) _routeIndex = Wrap(_routeIndex + 1, routes.Count);
+            if (key.Keycode is Key.Enter or Key.KpEnter or Key.Space) TravelSelected();
+            if (key.Keycode == Key.K) CycleContract();
+            return;
+        }
+
+        if (_screen is GameScreen.HarvestChoice or GameScreen.Reward or GameScreen.Shop or GameScreen.Greenhouse)
+        {
+            if (key.Keycode is >= Key.Key1 and <= Key.Key3)
+                ResolveChoice((int)key.Keycode - (int)Key.Key1);
+            if (key.Keycode == Key.E && _screen is GameScreen.Shop or GameScreen.Greenhouse)
+                OpenMap();
+            return;
+        }
+
+        if (_screen == GameScreen.Pause && key.Keycode == Key.Tab)
+            _screen = GameScreen.Map;
+        if (_screen == GameScreen.Result && key.Keycode is Key.Enter or Key.KpEnter)
+            _screen = GameScreen.Title;
     }
 
-    private void StartRun()
+    private void BeginRun()
     {
         _runSeed = (ulong)Time.GetTicksMsec();
         _rng.Seed = _runSeed;
-        _state = RunState.Playing;
-        _room = 1;
-        _playerHealth = 6;
-        _playerMaxHealth = 6;
-        _maxSeedPods = 3;
-        _seedPods = 3;
+        _map = SpringMapFactory.Create(_runSeed);
+        _playerHealth = _playerMaxHealth = 6;
+        _seedPods = _maxSeedPods = 3;
         _moonDew = 0;
-        _damageMultiplier = 1;
-        _fireRateMultiplier = 1;
-        _moveSpeedMultiplier = 1;
-        _plantRateMultiplier = 1;
-        _growthMultiplier = 1;
-        _harvestMultiplier = 1;
-        _dewCooldownMultiplier = 1;
-        _bulletPierce = 0;
-        _dewCooldown = 0;
-        _rollCooldown = 0;
-        Input.MouseMode = Input.MouseModeEnum.Hidden;
-        StartRoom();
-        ShowToast("月根在呼吸……");
+        _seasonLeaves = 0;
+        _score = 0;
+        _roomsCleared = 0;
+        _combatRoomsScored = 0;
+        _relics.Clear();
+        _recipes.Clear();
+        _bossDefeated = false;
+        PlayMusic("res://assets/audio/music/spring.ogg");
+        EnterRoom(0);
+        ShowMessage("春·苔灯地窖  天气预报已记录");
     }
 
-    private void StartRoom()
+    private void EnterRoom(int roomId)
     {
+        _map.CurrentRoomId = roomId;
+        _map.RevealFromCurrent();
         _enemies.Clear();
         _projectiles.Clear();
         _plants.Clear();
+        _soil.Clear();
         _pickups.Clear();
-        _particles.Clear();
-        _wetPatches.Clear();
-        _decor.Clear();
-        _roomClear = false;
-        _clearTimer = 0;
-        _roomIntroTimer = 1.35f;
-        _playerPosition = new Vector2(320, 286);
+        _effects.Clear();
+        _traps.Clear();
+        _playerPosition = new Vector2(240, 190);
         _playerVelocity = Vector2.Zero;
-        _invulnerability = 0.8f;
+        _invulnerability = 1;
+        _roomDamageTaken = 0;
+        _roomPlantsPlaced = 0;
+        _roomPlantsMatured = 0;
+        _roomHarvested = 0;
+        _roomRootsLeft = 0;
+        _roomRewardPending = false;
+        _roomFirstHarvest = true;
+        _contract = CurrentRoom.Contract;
+        _roomClear = CurrentRoom.Cleared || !IsCombatRoom;
+        if (!IsCombatRoom)
+            CurrentRoom.Cleared = true;
 
-        _rng.Seed = _runSeed + (ulong)(_room * 7919);
-        GenerateDecor();
+        ConfigureRoomSoil();
+        if (IsCombatRoom && !CurrentRoom.Cleared)
+            SpawnEncounter();
 
-        if (_room == 1)
+        _screen = CurrentRoom.Type switch
         {
-            SpawnGroup(EnemyKind.Sprout, 4);
-            SpawnGroup(EnemyKind.Radish, 1);
-        }
-        else if (_room == 2)
-        {
-            SpawnGroup(EnemyKind.Sprout, 4);
-            SpawnGroup(EnemyKind.Radish, 2);
-        }
-        else if (_room == 3)
-        {
-            SpawnGroup(EnemyKind.Sprout, 2);
-            SpawnGroup(EnemyKind.Radish, 2);
-            SpawnGroup(EnemyKind.Beetle, 2);
-        }
-        else if (_room == 4)
-        {
-            SpawnGroup(EnemyKind.Radish, 3);
-            SpawnGroup(EnemyKind.Beetle, 3);
-            SpawnGroup(EnemyKind.Sprout, 2);
-        }
-        else
-        {
-            SpawnEnemy(EnemyKind.Boss, new Vector2(320, 120));
-        }
-
-        PlayMusic(_room >= 5 ? "boss" : "spring");
-    }
-
-    private void GenerateDecor()
-    {
-        for (int i = 0; i < 28; i++)
-        {
-            float x = _rng.RandfRange(Arena.Position.X + 8, Arena.End.X - 8);
-            float y = _rng.RandfRange(Arena.Position.Y + 8, Arena.End.Y - 8);
-            if (new Vector2(x, y).DistanceTo(_playerPosition) < 55) continue;
-            _decor.Add((new Vector2(Mathf.Round(x), Mathf.Round(y)), _rng.RandiRange(0, 4)));
-        }
-    }
-
-    private void SpawnGroup(EnemyKind kind, int count)
-    {
-        for (int i = 0; i < count; i++)
-        {
-            Vector2 position;
-            int guard = 0;
-            do
-            {
-                position = new Vector2(_rng.RandfRange(76, 564), _rng.RandfRange(78, 226));
-                guard++;
-            } while (position.DistanceTo(_playerPosition) < 120 && guard < 20);
-            SpawnEnemy(kind, position);
-        }
-    }
-
-    private void SpawnEnemy(EnemyKind kind, Vector2 position)
-    {
-        float health = kind switch
-        {
-            EnemyKind.Sprout => 22,
-            EnemyKind.Radish => 30,
-            EnemyKind.Beetle => 46,
-            EnemyKind.Boss => 920,
-            _ => 20
+            RoomType.Shop => GameScreen.Shop,
+            RoomType.Greenhouse => GameScreen.Greenhouse,
+            _ => GameScreen.Playing
         };
 
+        if (CurrentRoom.Type == RoomType.Event && !CurrentRoom.RewardClaimed)
+            ResolveEvent();
+        if (CurrentRoom.Type == RoomType.Treasure && !CurrentRoom.RewardClaimed)
+            OpenReward();
+        if (CurrentRoom.Type == RoomType.Hidden && !CurrentRoom.RewardClaimed)
+            OpenReward();
+        if (CurrentRoom.Type == RoomType.Entrance)
+            _roomClear = true;
+    }
+
+    private void ConfigureRoomSoil()
+    {
+        if (CurrentRoom.Weather == RoomWeather.Rain)
+        {
+            _soil.Add(new SoilPatch { Type = SoilType.Wet, Position = new Vector2(145, 155), Radius = 34 });
+            _soil.Add(new SoilPatch { Type = SoilType.Wet, Position = new Vector2(330, 175), Radius = 32 });
+        }
+        else if (CurrentRoom.Weather == RoomWeather.MoonGap)
+        {
+            _soil.Add(new SoilPatch { Type = SoilType.Moonlit, Position = new Vector2(240, 150), Radius = 38 });
+        }
+
+        foreach (DesignRoom neighbor in _map.Adjacent().Where(room => room.RootTag != RootTag.None))
+        {
+            switch (neighbor.RootTag)
+            {
+                case RootTag.Wet:
+                    _soil.Add(new SoilPatch { Type = SoilType.Wet, Position = new Vector2(240, 175), Radius = 45 });
+                    break;
+                case RootTag.Moonlit:
+                    _soil.Add(new SoilPatch { Type = SoilType.Moonlit, Position = new Vector2(350, 145), Radius = 32 });
+                    break;
+                case RootTag.Corrupted:
+                    _soil.Add(new SoilPatch { Type = SoilType.Corrupted, Position = new Vector2(150, 175), Radius = 28 });
+                    break;
+                case RootTag.Rooted:
+                    AddPlant(SeedType.Pumpkin, new Vector2(240, 125), true);
+                    break;
+            }
+        }
+    }
+
+    private void SpawnEncounter()
+    {
+        _rng.Seed = (ulong)(uint)CurrentRoom.EncounterSeed;
+        if (CurrentRoom.Type == RoomType.Boss)
+        {
+            SpawnEnemy(EnemyType.LanternPumpkinKing, new Vector2(240, 105));
+            return;
+        }
+
+        float threat = 4 + _roomsCleared * 0.7f + (CurrentRoom.Type == RoomType.Elite ? 2.5f : 0);
+        if (_difficulty == 0) threat *= 0.75f;
+        if (_difficulty == 2) threat *= 1.3f;
+
+        if (CurrentRoom.Type == RoomType.Elite)
+        {
+            SpawnEnemy(EnemyType.EliteRadish, new Vector2(240, 110));
+            threat -= 3.5f;
+        }
+
+        EnemyType[] pool = [EnemyType.MudSprout, EnemyType.SpikeRadish, EnemyType.ShellBeetle, EnemyType.SeedThief];
+        int index = 0;
+        while (threat > 0.5f && _enemies.Count < 9)
+        {
+            EnemyType type = pool[(CurrentRoom.Id + index + _rng.RandiRange(0, 2)) % pool.Length];
+            float cost = type switch { EnemyType.SpikeRadish => 1.5f, EnemyType.ShellBeetle => 2f, _ => 1f };
+            if (cost > threat + 0.5f) type = EnemyType.MudSprout;
+            Vector2 position = new(_rng.RandfRange(75, 405), _rng.RandfRange(75, 205));
+            if (position.DistanceTo(_playerPosition) < 90) position.Y = 80;
+            SpawnEnemy(type, position);
+            threat -= cost;
+            index++;
+        }
+
+        if (_contract == "虫潮")
+        {
+            SpawnEnemy(EnemyType.MudSprout, new Vector2(95, 95));
+            SpawnEnemy(EnemyType.MudSprout, new Vector2(385, 95));
+        }
+        if (_contract == "腐土")
+        {
+            _soil.Add(new SoilPatch { Type = SoilType.Corrupted, Position = new Vector2(160, 150), Radius = 25 });
+            _soil.Add(new SoilPatch { Type = SoilType.Corrupted, Position = new Vector2(325, 160), Radius = 25 });
+        }
+
+        int trapCount = CurrentRoom.Type == RoomType.Elite ? 3 : CurrentRoom.Type == RoomType.Boss ? 2 : 1 + CurrentRoom.Id % 2;
+        for (int i = 0; i < trapCount; i++)
+        {
+            int kind = (CurrentRoom.Id + i) % 4;
+            _traps.Add(new Trap
+            {
+                Kind = kind,
+                Position = new Vector2(110 + i * 128, 132 + (i % 2) * 54),
+                Phase = _rng.RandfRange(0, 2.4f),
+                Cooldown = 1.1f + i * 0.35f
+            });
+        }
+    }
+
+    private void SpawnEnemy(EnemyType type, Vector2 position)
+    {
+        float health = type switch
+        {
+            EnemyType.MudSprout => 22,
+            EnemyType.SpikeRadish => 28,
+            EnemyType.ShellBeetle => 42,
+            EnemyType.SeedThief => 24,
+            EnemyType.EliteRadish => 58,
+            EnemyType.LanternPumpkinKing => 1350,
+            _ => 24
+        };
+        health *= _difficulty switch { 0 => 0.9f, 2 => 1.15f, _ => 1 };
         _enemies.Add(new Enemy
         {
-            Kind = kind,
+            Type = type,
             Position = position,
             Health = health,
             MaxHealth = health,
-            AttackTimer = _rng.RandfRange(0.5f, 1.5f),
-            StateTimer = _rng.RandfRange(0.2f, 1f),
+            AttackTimer = _rng.RandfRange(0.8f, 1.6f),
+            StateTimer = _rng.RandfRange(0.4f, 1.1f),
             Phase = _rng.RandfRange(0, Mathf.Tau)
         });
     }
 
-    private void UpdateGame(float dt)
+    private void UpdateWorld(float dt)
     {
-        if (_roomIntroTimer > 0) _roomIntroTimer -= dt;
-        if (_invulnerability > 0) _invulnerability -= dt;
-        if (_shotCooldown > 0) _shotCooldown -= dt;
-        if (_rollCooldown > 0) _rollCooldown -= dt;
-        if (_dewCooldown > 0) _dewCooldown -= dt;
+        _invulnerability = Math.Max(0, _invulnerability - dt);
+        _rollCooldown = Math.Max(0, _rollCooldown - dt);
+        _attackCooldown = Math.Max(0, _attackCooldown - dt);
+        _dewCooldown = Math.Max(0, _dewCooldown - dt);
 
-        UpdateAim();
+        UpdateAimFromMouse();
         UpdatePlayer(dt);
-        UpdateWetPatches(dt);
+        UpdateWeapons(dt);
         UpdatePlants(dt);
+        UpdateTraps(dt);
         UpdateEnemies(dt);
         UpdateProjectiles(dt);
         UpdatePickups(dt);
-        UpdateParticles(dt);
+        UpdateEffects(dt);
 
         if (!_roomClear && _enemies.Count == 0)
-        {
-            _roomClear = true;
-            _clearTimer = 0;
-            _seedPods = Math.Min(_maxSeedPods, _seedPods + 1);
-            Burst(new Vector2(320, 72), Honey, 18, 80);
-            PlaySound("clear");
-            ShowToast(_room == 5 ? "月光平静下来了" : "根门已经苏醒");
-        }
-
-        if (_roomClear) _clearTimer += dt;
+            CompleteRoom();
     }
 
-    private void UpdateAim()
+    private void UpdateTraps(float dt)
     {
-        Vector2 stick = new(Input.GetJoyAxis(0, JoyAxis.RightX), Input.GetJoyAxis(0, JoyAxis.RightY));
-        if (stick.Length() > 0.35f)
+        foreach (Trap trap in _traps)
         {
-            _aimDirection = stick.Normalized();
-            _usingControllerAim = true;
-        }
-        else if (!_usingControllerAim)
-        {
-            Vector2 direction = GetLocalMousePosition() - _playerPosition;
-            if (direction.LengthSquared() > 4) _aimDirection = direction.Normalized();
+            trap.Phase += dt;
+            trap.Cooldown -= dt;
+            if (trap.Cooldown > 0) continue;
+
+            if (trap.Kind == 0 && trap.Position.DistanceTo(_playerPosition) < 30)
+                HurtPlayer(trap.Position, 1);
+            else if (trap.Kind == 1)
+            {
+                Vector2 aimed = trap.Position.DirectionTo(_playerPosition);
+                SpawnProjectile(trap.Position, aimed * 92, 1, false, 8, 5);
+            }
+            else if (trap.Kind == 2 && trap.Position.DistanceTo(_playerPosition) < 35)
+                _playerVelocity *= 0.35f;
+            else if (trap.Kind == 3)
+                SpawnRootTelegraph(_playerPosition);
+
+            if (trap.Kind is 0 or 3)
+            {
+                foreach (Enemy enemy in _enemies.Where(enemy => enemy.Position.DistanceTo(trap.Position) < 32).ToArray())
+                    DamageEnemy(enemy, 1.5f);
+            }
+            trap.Cooldown = 2.5f + trap.Kind * 0.35f;
         }
     }
 
     private void UpdatePlayer(float dt)
     {
-        Vector2 movement = GetMovementInput();
+        Vector2 input = Input.GetVector("ui_left", "ui_right", "ui_up", "ui_down");
+        if (Input.IsKeyPressed(Key.A)) input.X -= 1;
+        if (Input.IsKeyPressed(Key.D)) input.X += 1;
+        if (Input.IsKeyPressed(Key.W)) input.Y -= 1;
+        if (Input.IsKeyPressed(Key.S)) input.Y += 1;
+        input = input.LimitLength();
 
         if (_rollTime > 0)
         {
             _rollTime -= dt;
-            _playerVelocity = _rollDirection * 245f;
+            _playerVelocity = _playerVelocity.MoveToward(Vector2.Zero, 330 * dt);
         }
         else
         {
-            _playerVelocity = movement * 104f * _moveSpeedMultiplier;
+            float speed = _roomClear ? 125 : 100;
+            if (_relics.Contains("蜗牛时钟")) speed *= 0.92f;
+            if (SoilAt(_playerPosition) == SoilType.Wet)
+                speed *= _relics.Contains("不漏水的靴子") ? 1.12f : 0.95f;
+            _playerVelocity = _playerVelocity.MoveToward(input * speed, 580 * dt);
         }
-
         _playerPosition += _playerVelocity * dt;
-        _playerPosition.X = Mathf.Clamp(_playerPosition.X, Arena.Position.X + 12, Arena.End.X - 12);
-        _playerPosition.Y = Mathf.Clamp(_playerPosition.Y, Arena.Position.Y + 16, Arena.End.Y - 10);
-
-        bool firing = Input.IsMouseButtonPressed(MouseButton.Left) || Input.IsJoyButtonPressed(0, JoyButton.RightShoulder);
-        if (firing && _shotCooldown <= 0 && _roomIntroTimer <= 0)
-            ShootPlayerProjectile();
+        _playerPosition.X = Mathf.Clamp(_playerPosition.X, Arena.Position.X + 10, Arena.End.X - 10);
+        _playerPosition.Y = Mathf.Clamp(_playerPosition.Y, Arena.Position.Y + 12, Arena.End.Y - 8);
     }
 
-    private Vector2 GetMovementInput()
+    private void UpdateAimFromMouse()
     {
-        Vector2 movement = Vector2.Zero;
-        if (Input.IsKeyPressed(Key.A) || Input.IsKeyPressed(Key.Left)) movement.X -= 1;
-        if (Input.IsKeyPressed(Key.D) || Input.IsKeyPressed(Key.Right)) movement.X += 1;
-        if (Input.IsKeyPressed(Key.W) || Input.IsKeyPressed(Key.Up)) movement.Y -= 1;
-        if (Input.IsKeyPressed(Key.S) || Input.IsKeyPressed(Key.Down)) movement.Y += 1;
-
-        Vector2 stick = new(Input.GetJoyAxis(0, JoyAxis.LeftX), Input.GetJoyAxis(0, JoyAxis.LeftY));
-        if (stick.Length() > 0.2f) movement = stick;
-        return movement.Length() > 1 ? movement.Normalized() : movement;
+        Vector2 mouse = GetLocalMousePosition();
+        if (mouse.DistanceTo(_playerPosition) > 4)
+            _aimDirection = _playerPosition.DirectionTo(mouse);
     }
 
-    private void ShootPlayerProjectile()
+    private void UpdateWeapons(float dt)
     {
-        _shotCooldown = 0.26f / _fireRateMultiplier;
-        Vector2 perpendicular = new(-_aimDirection.Y, _aimDirection.X);
-        float wobble = Mathf.Sin(_time * 19f) * 0.018f;
-        Vector2 direction = (_aimDirection + perpendicular * wobble).Normalized();
-        _projectiles.Add(new Projectile
+        bool firing = Input.IsMouseButtonPressed(MouseButton.Left) && _screen == GameScreen.Playing && !_roomClear;
+        if (_weapon == WeaponType.SunWaterer)
         {
-            Position = _playerPosition + direction * 13,
-            Velocity = direction * 240f,
-            Damage = 10f * _damageMultiplier,
-            Life = 1.15f,
-            Radius = 3,
-            Pierce = _bulletPierce,
-            Friendly = true,
-            Color = MoonCyan
-        });
-        for (int i = 0; i < 2; i++)
-            AddParticle(_playerPosition + direction * 11, -direction * _rng.RandfRange(12, 28) + perpendicular * _rng.RandfRange(-10, 10), 0.18f, 2, SproutGreen);
-        PlaySound("shoot");
-    }
-
-    private void TryRoll()
-    {
-        if (_rollCooldown > 0 || _rollTime > 0) return;
-        Vector2 movement = GetMovementInput();
-        _rollDirection = movement.LengthSquared() > 0.1f ? movement.Normalized() : _aimDirection;
-        _rollTime = 0.18f;
-        _rollCooldown = 1.05f;
-        _invulnerability = Math.Max(_invulnerability, 0.24f);
-        Burst(_playerPosition, MoonCyan, 7, 44);
-    }
-
-    private void TryPlant(Vector2 target)
-    {
-        if (_seedPods <= 0)
-        {
-            ShowToast("种袋空了");
-            return;
-        }
-
-        target.X = Mathf.Clamp(target.X, Arena.Position.X + 14, Arena.End.X - 14);
-        target.Y = Mathf.Clamp(target.Y, Arena.Position.Y + 18, Arena.End.Y - 12);
-        if (target.DistanceTo(_playerPosition) > 112)
-            target = _playerPosition + _playerPosition.DirectionTo(target) * 112;
-
-        target = new Vector2(Mathf.Round(target.X / 8) * 8, Mathf.Round(target.Y / 8) * 8);
-        if (_plants.Any(p => p.Position.DistanceTo(target) < 18))
-        {
-            ShowToast("这里已经长着东西");
-            return;
-        }
-
-        if (_plants.Count >= 4 + (_maxSeedPods - 3))
-        {
-            Plant oldest = _plants.OrderByDescending(p => p.Age).First();
-            HarvestPlant(oldest, false);
-        }
-
-        _seedPods--;
-        _plants.Add(new Plant { Position = target, Growth = 0, Age = 0, ShootTimer = 0.4f, Pulse = 0 });
-        Burst(target, Soil.Lightened(0.22f), 8, 35);
-        PlaySound("plant");
-        ShowToast(IsWet(target) ? "湿润土壤：生长加速" : "播下豌豆种");
-    }
-
-    private void UseDewRing()
-    {
-        if (_dewCooldown > 0)
-        {
-            ShowToast($"晨露圈还需 {_dewCooldown:0.0} 秒");
-            return;
-        }
-
-        _dewCooldown = 11f * _dewCooldownMultiplier;
-        _wetPatches.Add(new WetPatch { Position = _playerPosition, Radius = 54, Life = 12 });
-        foreach (Plant plant in _plants)
-        {
-            if (plant.Position.DistanceTo(_playerPosition) <= 58)
-                plant.Growth += 0.7f;
-        }
-        foreach (Enemy enemy in _enemies)
-        {
-            if (enemy.Position.DistanceTo(_playerPosition) <= 58 && enemy.Kind != EnemyKind.Boss)
-                enemy.Velocity += _playerPosition.DirectionTo(enemy.Position) * 150f;
-        }
-        Burst(_playerPosition, MoonCyan, 20, 95);
-        PlaySound("dew");
-        ShowToast("晨露浸润了土地");
-    }
-
-    private void TryInteract()
-    {
-        Plant? nearest = _plants.Where(p => p.Mature && p.Position.DistanceTo(_playerPosition) < 42)
-            .OrderBy(p => p.Position.DistanceTo(_playerPosition)).FirstOrDefault();
-        if (nearest != null)
-        {
-            HarvestPlant(nearest, true);
-            return;
-        }
-
-        if (_roomClear && _clearTimer > 0.5f && _playerPosition.DistanceTo(new Vector2(320, 69)) < 42)
-        {
-            if (_room >= 5)
+            if (firing && _weaponHeat < 2.5f)
             {
-                _state = RunState.Victory;
-                Input.MouseMode = Input.MouseModeEnum.Visible;
-                PlayMusic("menu");
+                _weaponHeat += dt;
+                _weaponEffect = 0.08f;
+                Vector2 end = _playerPosition + _aimDirection * 190;
+                foreach (Enemy enemy in _enemies.ToArray())
+                {
+                    Vector2 closest = Geometry2D.GetClosestPointToSegment(enemy.Position, _playerPosition, end);
+                    if (closest.DistanceTo(enemy.Position) < 13)
+                        DamageEnemy(enemy, 28 * dt);
+                }
+                foreach (Plant plant in _plants)
+                {
+                    Vector2 closest = Geometry2D.GetClosestPointToSegment(plant.Position, _playerPosition, end);
+                    if (closest.DistanceTo(plant.Position) < 15)
+                        plant.Growth += dt * 0.7f;
+                }
             }
             else
             {
-                OpenUpgradeChoice();
+                _weaponHeat = Math.Max(0, _weaponHeat - dt * (firing ? 0.2f : 1.35f));
+            }
+            return;
+        }
+
+        if (!firing || _attackCooldown > 0) return;
+        if (_weapon == WeaponType.MoonSickle)
+        {
+            _attackCooldown = 1f / 1.4f;
+            _weaponEffect = 0.22f;
+            foreach (Enemy enemy in _enemies.ToArray())
+            {
+                Vector2 toEnemy = _playerPosition.DirectionTo(enemy.Position);
+                if (enemy.Position.DistanceTo(_playerPosition) <= 42 && Math.Abs(_aimDirection.AngleTo(toEnemy)) <= Mathf.DegToRad(55))
+                    DamageEnemy(enemy, 18);
+            }
+            foreach (Projectile projectile in _projectiles.Where(projectile => !projectile.Friendly && !projectile.Heavy).ToArray())
+            {
+                if (projectile.Position.DistanceTo(_playerPosition) <= 43)
+                {
+                    projectile.Friendly = true;
+                    projectile.Velocity = -projectile.Velocity * 1.25f;
+                    projectile.AtlasIndex = 0;
+                }
             }
         }
-    }
-
-    private void UpdateWetPatches(float dt)
-    {
-        for (int i = _wetPatches.Count - 1; i >= 0; i--)
+        else
         {
-            _wetPatches[i].Life -= dt;
-            if (_wetPatches[i].Life <= 0) _wetPatches.RemoveAt(i);
+            _attackCooldown = 0.4f;
+            SpawnProjectile(_playerPosition + _aimDirection * 12, _aimDirection * 245, 10, true, 0, 4);
         }
     }
-
-    private bool IsWet(Vector2 position) => _wetPatches.Any(w => w.Position.DistanceTo(position) <= w.Radius);
 
     private void UpdatePlants(float dt)
     {
         foreach (Plant plant in _plants.ToArray())
         {
             plant.Age += dt;
-            plant.Pulse += dt;
-            if (!plant.Mature)
-            {
-                float wetMultiplier = IsWet(plant.Position) ? 1.65f : 1f;
-                plant.Growth += dt * _growthMultiplier * wetMultiplier;
-                if (plant.Growth >= 3.2f)
-                {
-                    plant.Mature = true;
-                    plant.ShootTimer = 0.05f;
-                    Burst(plant.Position, SproutGreen, 11, 48);
-                }
-            }
-            else
-            {
-                plant.ShootTimer -= dt;
-                if (plant.ShootTimer <= 0 && _enemies.Count > 0)
-                {
-                    Enemy? target = _enemies.OrderBy(e => e.Position.DistanceSquaredTo(plant.Position)).FirstOrDefault();
-                    if (target != null && target.Position.DistanceTo(plant.Position) < 175)
-                    {
-                        Vector2 direction = plant.Position.DirectionTo(target.Position);
-                        _projectiles.Add(new Projectile
-                        {
-                            Position = plant.Position + direction * 8,
-                            Velocity = direction * 190,
-                            Damage = 7 * _damageMultiplier,
-                            Life = 1.2f,
-                            Radius = 3,
-                            Pierce = 0,
-                            Friendly = true,
-                            Color = SproutGreen
-                        });
-                        plant.ShootTimer = 0.78f / _plantRateMultiplier;
-                    }
-                    else plant.ShootTimer = 0.2f;
-                }
-            }
-        }
-    }
+            SoilType soil = SoilAt(plant.Position);
+            float growthRate = soil == SoilType.Wet ? 1.15f : 1f;
+            if (_contract == "旱季") growthRate *= 0.75f;
+            if (_relics.Contains("蜗牛时钟")) growthRate *= 1.18f;
+            if (soil == SoilType.Moonlit && _relics.Contains("月下玻璃瓶")) growthRate *= 1.35f;
+            if (_relics.Contains("园丁的便签") && plant.Age < 0.05f) plant.Growth += GrowthTime(plant.Type) * 0.25f;
+            if (soil != SoilType.Corrupted) plant.Growth += dt * growthRate;
 
-    private void HarvestPlant(Plant plant, bool reward)
-    {
-        float radius = 46f * _harvestMultiplier;
-        float damage = 28f * _damageMultiplier * _harvestMultiplier;
-        foreach (Enemy enemy in _enemies.ToArray())
-        {
-            if (enemy.Position.DistanceTo(plant.Position) <= radius)
-                DamageEnemy(enemy, damage, plant.Position.DirectionTo(enemy.Position) * 70);
+            if (!plant.Mature && plant.Growth >= GrowthTime(plant.Type))
+            {
+                plant.Mature = true;
+                _roomPlantsMatured++;
+                _effects.Add(new Fx { Atlas = "atlas.ecology", Row = 1, Position = plant.Position, Size = 44 });
+            }
+
+            if (!plant.Mature) continue;
+            plant.AttackTimer -= dt;
+            if (plant.Type == SeedType.Pea && plant.AttackTimer <= 0)
+            {
+                Enemy? target = NearestEnemy(plant.Position);
+                if (target != null)
+                    SpawnProjectile(plant.Position + new Vector2(0, -8), plant.Position.DirectionTo(target.Position) * 180, 6, true, 0, 3);
+                plant.AttackTimer = 0.8f;
+            }
+            else if (plant.Type == SeedType.Chili)
+            {
+                foreach (Enemy enemy in _enemies.Where(enemy => enemy.Position.DistanceTo(plant.Position) < 45).ToArray())
+                    DamageEnemy(enemy, (_relics.Contains("暖手石") ? 6.5f : 5f) * dt);
+            }
+            else if (plant.Type == SeedType.Pumpkin)
+            {
+                foreach (Enemy enemy in _enemies.Where(enemy => enemy.Position.DistanceTo(plant.Position) < 24))
+                    enemy.Velocity *= 0.72f;
+            }
+            else if (plant.Type == SeedType.Dandelion && plant.AttackTimer <= 0)
+            {
+                Enemy? target = NearestEnemy(plant.Position);
+                if (target != null)
+                    SpawnProjectile(plant.Position, plant.Position.DirectionTo(target.Position) * 115, 7, true, 12, 4, true);
+                plant.AttackTimer = 1.2f;
+            }
         }
-        Burst(plant.Position, Honey, 20, 110);
-        PlaySound("harvest");
-        _screenShake = Math.Max(_screenShake, 3.5f);
-        _plants.Remove(plant);
-        if (reward && _rng.Randf() < 0.38f)
-            SpawnPickup(PickupKind.SeedPod, plant.Position);
     }
 
     private void UpdateEnemies(float dt)
     {
         foreach (Enemy enemy in _enemies.ToArray())
         {
-            enemy.Flash = Math.Max(0, enemy.Flash - dt * 8);
+            enemy.Phase += dt;
             enemy.AttackTimer -= dt;
             enemy.StateTimer -= dt;
-            enemy.Phase += dt;
+            enemy.Flash = Math.Max(0, enemy.Flash - dt * 8);
 
-            switch (enemy.Kind)
+            if (enemy.Type == EnemyType.LanternPumpkinKing)
             {
-                case EnemyKind.Sprout:
-                    UpdateSprout(enemy, dt);
-                    break;
-                case EnemyKind.Radish:
-                    UpdateRadish(enemy, dt);
-                    break;
-                case EnemyKind.Beetle:
-                    UpdateBeetle(enemy, dt);
-                    break;
-                case EnemyKind.Boss:
-                    UpdateBoss(enemy, dt);
-                    break;
+                UpdateBoss(enemy, dt);
+                continue;
+            }
+
+            if (enemy.Type == EnemyType.MudSprout)
+            {
+                enemy.Velocity = enemy.Velocity.MoveToward(enemy.Position.DirectionTo(_playerPosition) * 42, 90 * dt);
+                if (enemy.StateTimer <= 0)
+                {
+                    enemy.Velocity += enemy.Position.DirectionTo(_playerPosition) * 85;
+                    enemy.StateTimer = 1.8f;
+                }
+            }
+            else if (enemy.Type is EnemyType.SpikeRadish or EnemyType.EliteRadish)
+            {
+                enemy.Velocity = enemy.Velocity.MoveToward(Vector2.Zero, 120 * dt);
+                if (enemy.AttackTimer <= 0)
+                {
+                    Vector2 aimed = enemy.Position.DirectionTo(_playerPosition);
+                    for (int i = -1; i <= 1; i++)
+                        SpawnProjectile(enemy.Position, aimed.Rotated(i * 0.13f) * 105, 1, false, 4, 4);
+                    if (enemy.Type == EnemyType.EliteRadish)
+                        SpawnRootTelegraph(_playerPosition);
+                    enemy.AttackTimer = enemy.Type == EnemyType.EliteRadish ? 2.6f : 2.2f;
+                }
+            }
+            else if (enemy.Type == EnemyType.ShellBeetle)
+            {
+                if (!enemy.Charging && enemy.StateTimer <= 0)
+                {
+                    enemy.Charging = true;
+                    enemy.StateTimer = 0.8f;
+                    enemy.Velocity = Vector2.Zero;
+                }
+                else if (enemy.Charging && enemy.StateTimer <= 0)
+                {
+                    enemy.Velocity = enemy.Position.DirectionTo(_playerPosition) * 165;
+                    enemy.Charging = false;
+                    enemy.StateTimer = 2.2f;
+                }
+                else if (!enemy.Charging)
+                    enemy.Velocity = enemy.Velocity.MoveToward(Vector2.Zero, 80 * dt);
+            }
+            else if (enemy.Type == EnemyType.SeedThief)
+            {
+                Plant? target = _plants.Where(plant => plant.Mature).OrderBy(plant => plant.Position.DistanceSquaredTo(enemy.Position)).FirstOrDefault();
+                Vector2 destination = target?.Position ?? _playerPosition;
+                enemy.Velocity = enemy.Velocity.MoveToward(enemy.Position.DirectionTo(destination) * 72, 120 * dt);
+                if (target != null && enemy.Position.DistanceTo(target.Position) < 16)
+                {
+                    _plants.Remove(target);
+                    enemy.Velocity *= 1.35f;
+                    ShowMessage("偷苗鼠吃掉了成熟植物！");
+                }
             }
 
             enemy.Position += enemy.Velocity * dt;
-            enemy.Velocity = enemy.Velocity.MoveToward(Vector2.Zero, dt * 170);
             enemy.Position.X = Mathf.Clamp(enemy.Position.X, Arena.Position.X + 12, Arena.End.X - 12);
-            enemy.Position.Y = Mathf.Clamp(enemy.Position.Y, Arena.Position.Y + 15, Arena.End.Y - 10);
-
-            float hitRadius = enemy.Kind == EnemyKind.Boss ? 26 : 11;
-            if (_roomIntroTimer <= 0 && enemy.Position.DistanceTo(_playerPosition) < hitRadius + 8)
-                HurtPlayer(enemy.Position, enemy.Kind == EnemyKind.Boss && enemy.Charging ? 2 : 1);
+            enemy.Position.Y = Mathf.Clamp(enemy.Position.Y, Arena.Position.Y + 12, Arena.End.Y - 10);
+            if (enemy.Type is EnemyType.MudSprout or EnemyType.ShellBeetle && enemy.Position.DistanceTo(_playerPosition) < 14)
+                HurtPlayer(enemy.Position, 1);
         }
     }
 
-    private void UpdateSprout(Enemy enemy, float dt)
+    private void UpdateBoss(Enemy boss, float dt)
     {
-        Vector2 direction = enemy.Position.DirectionTo(_playerPosition);
-        float hop = 0.72f + Mathf.Max(0, Mathf.Sin(enemy.Phase * 5f)) * 0.45f;
-        enemy.Velocity += direction * 55f * hop * dt * 5f;
-        if (enemy.AttackTimer <= 0)
+        float ratio = boss.Health / boss.MaxHealth;
+        HashSet<RootTag> inherited = CurrentRoom.Connections
+            .Select(_map.Room)
+            .Where(room => room.RootTag != RootTag.None)
+            .Select(room => room.RootTag)
+            .ToHashSet();
+        Vector2 target = new(240 + Mathf.Sin(boss.Phase * 0.6f) * 105, 105 + Mathf.Sin(boss.Phase * 0.9f) * 28);
+        boss.Velocity = boss.Velocity.MoveToward(boss.Position.DirectionTo(target) * (ratio < 0.3f ? 34 : 22), 70 * dt);
+        boss.Position += boss.Velocity * dt;
+
+        if (boss.AttackTimer > 0) return;
+        Vector2 aimed = boss.Position.DirectionTo(_playerPosition);
+        int count = ratio < 0.65f ? 7 : 5;
+        for (int i = 0; i < count; i++)
         {
-            enemy.AttackTimer = 1.6f;
-            enemy.Velocity += direction * 68f;
+            float spread = Mathf.DegToRad(58);
+            float angle = count == 1 ? 0 : -spread / 2 + spread * i / (count - 1);
+            float speed = inherited.Contains(RootTag.Wet) ? 82 : 92;
+            SpawnProjectile(boss.Position, aimed.Rotated(angle) * speed, 1, false, 15, 5, false, true);
         }
+        if (inherited.Contains(RootTag.Moonlit))
+            SpawnProjectile(boss.Position, aimed.Rotated(Mathf.Sin(boss.Phase) * 0.6f) * 115, 1, false, 11, 5);
+
+        if (ratio < 0.65f)
+            _soil.Add(new SoilPatch { Type = SoilType.Fertile, Position = _playerPosition, Radius = 26 });
+        if (ratio < 0.3f)
+        {
+            for (int i = 0; i < 3; i++)
+                SpawnRootTelegraph(_playerPosition + Vector2.Right.Rotated(i * Mathf.Tau / 3) * 42);
+        }
+        boss.AttackTimer = ratio < 0.3f ? 1.45f : ratio < 0.65f ? 1.85f : 2.2f;
     }
 
-    private void UpdateRadish(Enemy enemy, float dt)
+    private void SpawnRootTelegraph(Vector2 position)
     {
-        Vector2 toPlayer = enemy.Position.DirectionTo(_playerPosition);
-        float distance = enemy.Position.DistanceTo(_playerPosition);
-        Vector2 tangent = new(-toPlayer.Y, toPlayer.X);
-        if (distance < 105) enemy.Velocity -= toPlayer * 35f * dt * 5;
-        else if (distance > 165) enemy.Velocity += toPlayer * 28f * dt * 5;
-        enemy.Velocity += tangent * Mathf.Sin(enemy.Phase * 1.7f) * 11f * dt;
-
-        if (enemy.AttackTimer <= 0 && _roomIntroTimer <= 0)
-        {
-            enemy.AttackTimer = 2.05f;
-            for (int i = -1; i <= 1; i++)
-            {
-                Vector2 direction = toPlayer.Rotated(i * 0.16f);
-                ShootEnemyProjectile(enemy.Position + direction * 10, direction, 95, 4);
-            }
-        }
-    }
-
-    private void UpdateBeetle(Enemy enemy, float dt)
-    {
-        if (enemy.Charging)
-        {
-            enemy.Velocity = enemy.LockedDirection * 175f;
-            if (enemy.StateTimer <= 0)
-            {
-                enemy.Charging = false;
-                enemy.StateTimer = 1.25f;
-                enemy.Velocity *= 0.2f;
-            }
-        }
-        else if (enemy.StateTimer <= 0 && _roomIntroTimer <= 0)
-        {
-            enemy.Charging = true;
-            enemy.LockedDirection = enemy.Position.DirectionTo(_playerPosition);
-            enemy.StateTimer = 0.64f;
-            Burst(enemy.Position, Pumpkin, 5, 28);
-        }
-        else
-        {
-            enemy.Velocity += enemy.Position.DirectionTo(_playerPosition) * 20f * dt;
-        }
-    }
-
-    private void UpdateBoss(Enemy enemy, float dt)
-    {
-        float healthRatio = enemy.Health / enemy.MaxHealth;
-        float speed = healthRatio < 0.35f ? 24 : 17;
-        Vector2 target = new Vector2(320, 150) + new Vector2(Mathf.Cos(enemy.Phase * 0.55f), Mathf.Sin(enemy.Phase * 0.8f)) * new Vector2(150, 62);
-        enemy.Velocity += enemy.Position.DirectionTo(target) * speed * dt * 3f;
-
-        if (enemy.AttackTimer <= 0 && _roomIntroTimer <= 0)
-        {
-            int count = healthRatio < 0.35f ? 14 : healthRatio < 0.68f ? 11 : 8;
-            float bulletSpeed = healthRatio < 0.35f ? 92 : 78;
-            float offset = enemy.Phase * 0.4f;
-            for (int i = 0; i < count; i++)
-            {
-                Vector2 direction = Vector2.Right.Rotated(offset + Mathf.Tau * i / count);
-                ShootEnemyProjectile(enemy.Position + direction * 24, direction, bulletSpeed, 5);
-            }
-            if (healthRatio < 0.68f)
-            {
-                Vector2 aimed = enemy.Position.DirectionTo(_playerPosition);
-                for (int i = -1; i <= 1; i++)
-                    ShootEnemyProjectile(enemy.Position + aimed * 18, aimed.Rotated(i * 0.14f), 125, 5);
-            }
-            enemy.AttackTimer = healthRatio < 0.35f ? 1.05f : 1.42f;
-            _screenShake = Math.Max(_screenShake, 2.2f);
-        }
-    }
-
-    private void ShootEnemyProjectile(Vector2 position, Vector2 direction, float speed, float radius)
-    {
-        _projectiles.Add(new Projectile
-        {
-            Position = position,
-            Velocity = direction * speed,
-            Damage = 1,
-            Life = 4.8f,
-            Radius = radius,
-            Friendly = false,
-            Color = Pumpkin
-        });
+        _effects.Add(new Fx { Atlas = "atlas.telegraph", Row = 0, Position = position, Life = 1, MaxLife = 1, Size = 46 });
+        SpawnProjectile(position, Vector2.Zero, 1, false, 13, 10, false, true, 0.95f);
     }
 
     private void UpdateProjectiles(float dt)
     {
-        for (int i = _projectiles.Count - 1; i >= 0; i--)
+        foreach (Projectile projectile in _projectiles.ToArray())
         {
-            Projectile projectile = _projectiles[i];
-            projectile.Position += projectile.Velocity * dt;
             projectile.Life -= dt;
-
-            if (projectile.Life <= 0 || !Arena.Grow(8).HasPoint(projectile.Position))
+            if (projectile.Homing && projectile.Friendly)
             {
-                _projectiles.RemoveAt(i);
+                Enemy? target = NearestEnemy(projectile.Position);
+                if (target != null)
+                    projectile.Velocity = projectile.Velocity.Lerp(projectile.Position.DirectionTo(target.Position) * projectile.Velocity.Length(), dt * 4);
+            }
+            projectile.Position += projectile.Velocity * dt;
+
+            if (projectile.Life <= 0 || !new Rect2(12, 20, 456, 240).HasPoint(projectile.Position))
+            {
+                _projectiles.Remove(projectile);
                 continue;
             }
 
             if (projectile.Friendly)
             {
-                bool removed = false;
-                foreach (Enemy enemy in _enemies.ToArray())
+                Enemy? hit = _enemies.FirstOrDefault(enemy => enemy.Position.DistanceTo(projectile.Position) < projectile.Radius + (enemy.Type == EnemyType.LanternPumpkinKing ? 28 : 11));
+                if (hit != null)
                 {
-                    float radius = enemy.Kind == EnemyKind.Boss ? 25 : 10;
-                    if (projectile.Position.DistanceTo(enemy.Position) <= projectile.Radius + radius)
+                    DamageEnemy(hit, projectile.Damage);
+                    if (projectile.AtlasIndex == 0 && _relics.Contains("雨后豆荚") && SoilAt(hit.Position) == SoilType.Wet)
                     {
-                        DamageEnemy(enemy, projectile.Damage, projectile.Velocity.Normalized() * 28);
-                        Burst(projectile.Position, projectile.Color, 4, 40);
-                        if (projectile.Pierce > 0)
-                        {
-                            projectile.Pierce--;
-                            projectile.Damage *= 0.82f;
-                        }
-                        else
-                        {
-                            _projectiles.RemoveAt(i);
-                            removed = true;
-                        }
-                        break;
+                        Enemy? bounce = _enemies.Where(enemy => enemy != hit)
+                            .OrderBy(enemy => enemy.Position.DistanceSquaredTo(hit.Position))
+                            .FirstOrDefault();
+                        if (bounce != null)
+                            SpawnProjectile(hit.Position, hit.Position.DirectionTo(bounce.Position) * 190, projectile.Damage * 0.75f, true, 0, projectile.Radius);
                     }
+                    _projectiles.Remove(projectile);
                 }
-                if (removed) continue;
             }
-            else if (projectile.Position.DistanceTo(_playerPosition) <= projectile.Radius + 7)
+            else if (projectile.Velocity.LengthSquared() < 1 && projectile.Life > 0.05f)
             {
-                HurtPlayer(projectile.Position, 1);
-                _projectiles.RemoveAt(i);
+                if (projectile.Life < 0.08f && projectile.Position.DistanceTo(_playerPosition) < 20)
+                    HurtPlayer(projectile.Position, projectile.Damage);
+            }
+            else if (projectile.Position.DistanceTo(_playerPosition) < projectile.Radius + 7)
+            {
+                HurtPlayer(projectile.Position, projectile.Damage);
+                _projectiles.Remove(projectile);
             }
         }
-    }
-
-    private void DamageEnemy(Enemy enemy, float damage, Vector2 knockback)
-    {
-        if (!_enemies.Contains(enemy)) return;
-        enemy.Health -= damage;
-        enemy.Flash = 1;
-        if (enemy.Kind != EnemyKind.Boss) enemy.Velocity += knockback;
-        _screenShake = Math.Max(_screenShake, enemy.Kind == EnemyKind.Boss ? 1.4f : 0.7f);
-
-        if (enemy.Health <= 0)
-        {
-            _enemies.Remove(enemy);
-            int particleCount = enemy.Kind == EnemyKind.Boss ? 42 : 12;
-            Burst(enemy.Position, enemy.Kind == EnemyKind.Boss ? Pumpkin : SproutGreen, particleCount, enemy.Kind == EnemyKind.Boss ? 140 : 72);
-            int dewCount = enemy.Kind == EnemyKind.Boss ? 12 : _rng.RandiRange(1, 2);
-            for (int i = 0; i < dewCount; i++) SpawnPickup(PickupKind.MoonDew, enemy.Position);
-            if (enemy.Kind != EnemyKind.Boss && _rng.Randf() < 0.12f) SpawnPickup(PickupKind.SeedPod, enemy.Position);
-            if (_playerHealth <= 3 && _rng.Randf() < 0.08f) SpawnPickup(PickupKind.Heart, enemy.Position);
-        }
-    }
-
-    private void HurtPlayer(Vector2 source, float damage)
-    {
-        if (_invulnerability > 0 || _rollTime > 0 || _state != RunState.Playing) return;
-        _playerHealth -= damage;
-        _invulnerability = 0.82f;
-        _playerVelocity += source.DirectionTo(_playerPosition) * 110;
-        _screenShake = 6;
-        _hurtVignette = 1;
-        Burst(_playerPosition, HealthRed, 12, 85);
-        PlaySound("hurt");
-        ShowToast(damage > 1 ? "重击！" : "小心！");
-        if (_playerHealth <= 0)
-        {
-            _playerHealth = 0;
-            _state = RunState.GameOver;
-            Input.MouseMode = Input.MouseModeEnum.Visible;
-            PlayMusic("menu");
-        }
-    }
-
-    private void SpawnPickup(PickupKind kind, Vector2 position)
-    {
-        _pickups.Add(new Pickup
-        {
-            Kind = kind,
-            Position = position,
-            Velocity = new Vector2(_rng.RandfRange(-38, 38), _rng.RandfRange(-55, -20)),
-            Life = 14
-        });
     }
 
     private void UpdatePickups(float dt)
     {
-        for (int i = _pickups.Count - 1; i >= 0; i--)
+        foreach (Pickup pickup in _pickups.ToArray())
         {
-            Pickup pickup = _pickups[i];
             pickup.Life -= dt;
-            pickup.Velocity = pickup.Velocity.MoveToward(Vector2.Zero, dt * 80);
-            if (pickup.Position.DistanceTo(_playerPosition) < 68)
-                pickup.Velocity += pickup.Position.DirectionTo(_playerPosition) * 260 * dt;
-            pickup.Position += pickup.Velocity * dt;
-
-            if (pickup.Position.DistanceTo(_playerPosition) < 13)
+            if (pickup.Position.DistanceTo(_playerPosition) < 22)
             {
-                switch (pickup.Kind)
-                {
-                    case PickupKind.MoonDew:
-                        _moonDew++;
-                        break;
-                    case PickupKind.SeedPod:
-                        _seedPods = Math.Min(_maxSeedPods, _seedPods + 1);
-                        ShowToast("获得种荚");
-                        break;
-                    case PickupKind.Heart:
-                        _playerHealth = Math.Min(_playerMaxHealth, _playerHealth + 2);
-                        ShowToast("心莓恢复了生命");
-                        break;
-                }
-                Burst(pickup.Position, pickup.Kind == PickupKind.Heart ? HealthRed : Honey, 6, 48);
-                PlaySound("pickup");
-                _pickups.RemoveAt(i);
+                if (pickup.AtlasIndex == 0) _moonDew++;
+                else if (pickup.AtlasIndex == 2) _seedPods = Math.Min(_maxSeedPods, _seedPods + 1);
+                else if (pickup.AtlasIndex == 3) _playerHealth = Math.Min(_playerMaxHealth, _playerHealth + 1);
+                _pickups.Remove(pickup);
             }
             else if (pickup.Life <= 0)
+                _pickups.Remove(pickup);
+        }
+    }
+
+    private void UpdateEffects(float dt)
+    {
+        foreach (Fx effect in _effects.ToArray())
+        {
+            effect.Life -= dt;
+            if (effect.Life <= 0) _effects.Remove(effect);
+        }
+    }
+
+    private void CompleteRoom()
+    {
+        _roomClear = true;
+        CurrentRoom.Cleared = true;
+        _roomsCleared++;
+        _roomRewardPending = true;
+        _moonDew += CurrentRoom.Type == RoomType.Elite ? 10 : 5;
+        if (_rng.Randf() < (_playerHealth <= 2 ? 0.35f : 0.15f))
+            _pickups.Add(new Pickup { AtlasIndex = 3, Position = new Vector2(240, 125) });
+        if (_rng.Randf() < (_seedPods == 0 ? 0.45f : 0.22f))
+            _pickups.Add(new Pickup { AtlasIndex = 2, Position = new Vector2(265, 125) });
+
+        int baseScore = CurrentRoom.Type == RoomType.Boss ? 1500 : CurrentRoom.Type == RoomType.Elite ? 400 : 100;
+        if (CurrentRoom.Type == RoomType.Combat && _combatRoomsScored++ >= 5) baseScore = 0;
+        if (_roomDamageTaken == 0) baseScore += baseScore / 4;
+        baseScore += Mathf.FloorToInt(baseScore * ContractMultiplier(_contract));
+        _score += baseScore;
+
+        if (CurrentRoom.Type == RoomType.Boss)
+        {
+            _bossDefeated = true;
+            _score += 300;
+            _screen = GameScreen.Result;
+            PlayMusic("res://assets/audio/music/menu.ogg");
+            return;
+        }
+
+        _effects.Add(new Fx { Atlas = "atlas.impacts", Row = 3, Position = new Vector2(240, 120), Size = 58 });
+        ShowMessage("房间已恢复平静 · E 处理植物并查看地图");
+    }
+
+    private void ResolveRoomExit()
+    {
+        if (_plants.Any(plant => plant.Mature))
+        {
+            _choiceIndex = 0;
+            _screen = GameScreen.HarvestChoice;
+        }
+        else if (CurrentRoom.Type is RoomType.Combat or RoomType.Elite && _roomsCleared % 3 == 0)
+        {
+            OpenReward();
+        }
+        else
+        {
+            OpenMap();
+        }
+    }
+
+    private void ResolveChoice(int index)
+    {
+        if (_screen == GameScreen.HarvestChoice)
+        {
+            if (index == 0) HarvestAll();
+            else LeaveRoot();
+            if (CurrentRoom.Type is RoomType.Combat or RoomType.Elite && _roomsCleared % 3 == 0)
+                OpenReward();
+            else
+                OpenMap();
+            return;
+        }
+
+        if (_screen == GameScreen.Reward)
+        {
+            string[] relics = RewardChoices();
+            if (index >= relics.Length) return;
+            _relics.Add(relics[index]);
+            ApplyRelic(relics[index]);
+            CurrentRoom.RewardClaimed = true;
+            ShowMessage($"获得遗物：{relics[index]}");
+            OpenMap();
+            return;
+        }
+
+        if (_screen == GameScreen.Shop)
+        {
+            int[] prices = [8, 10, 22];
+            if (index < 0 || index >= prices.Length || _moonDew < prices[index]) return;
+            _moonDew -= prices[index];
+            if (index == 0) _playerHealth = Math.Min(_playerMaxHealth, _playerHealth + 1);
+            if (index == 1) _seedPods = Math.Min(_maxSeedPods, _seedPods + 1);
+            if (index == 2)
             {
-                _pickups.RemoveAt(i);
+                string relic = RewardChoices()[0];
+                _relics.Add(relic);
+                ApplyRelic(relic);
+            }
+            ShowMessage("眠鼠商人的货台已经空了");
+            return;
+        }
+
+        if (_screen == GameScreen.Greenhouse)
+        {
+            if (CurrentRoom.RewardClaimed) return;
+            if (index == 0)
+            {
+                _seedPods = _maxSeedPods;
+                ShowMessage("苔婆婆升级了当前主种子");
+            }
+            else if (index == 1)
+            {
+                DesignRoom? root = _map.Rooms.LastOrDefault(room => room.RootTag != RootTag.None);
+                if (root != null) root.RootTag = RootTag.Moonlit;
+                ShowMessage("最近的根忆已移栽到月照地");
+            }
+            else
+            {
+                _seasonLeaves++;
+                ShowMessage("一个放弃的奖励已被封存");
+            }
+            CurrentRoom.RewardClaimed = true;
+        }
+    }
+
+    private void HarvestAll()
+    {
+        int matureKinds = _plants.Where(plant => plant.Mature).Select(plant => plant.Type).Distinct().Count();
+        foreach (Plant plant in _plants.Where(plant => plant.Mature).ToArray())
+            HarvestPlant(plant);
+        if (matureKinds >= 3 && _relics.Contains("三齿小耙"))
+            _seedPods = Math.Min(_maxSeedPods, _seedPods + 1);
+        _roomHarvested++;
+        _moonDew += Math.Max(1, _plants.Count);
+        _plants.Clear();
+    }
+
+    private void LeaveRoot()
+    {
+        Plant? chosen = _plants.FirstOrDefault(plant => plant.Mature);
+        if (chosen == null) return;
+        RootTag tag = RootTagFor(chosen);
+        CurrentRoom.RootTag = tag;
+        _roomRootsLeft++;
+        _plants.Remove(chosen);
+        foreach (Plant plant in _plants.Where(plant => plant.Mature).ToArray())
+            HarvestPlant(plant);
+        _plants.Clear();
+        RefreshRecipes();
+        ShowMessage($"留下{DesignNames.Root(tag)}根忆，相邻房间已改变");
+    }
+
+    private void HarvestPlant(Plant plant)
+    {
+        _effects.Add(new Fx { Atlas = "atlas.ecology", Row = 2, Position = plant.Position, Size = 54 });
+        if (plant.Type == SeedType.Pea)
+        {
+            for (int i = 0; i < 5; i++)
+                SpawnProjectile(plant.Position, Vector2.Right.Rotated(Mathf.Tau * i / 5) * 175, 6, true, 0, 3);
+        }
+        else if (plant.Type == SeedType.Chili)
+        {
+            foreach (Enemy enemy in _enemies.Where(enemy => enemy.Position.DistanceTo(plant.Position) < 44).ToArray())
+                DamageEnemy(enemy, 28);
+        }
+        else if (plant.Type == SeedType.Pumpkin)
+        {
+            _playerHealth = Math.Min(_playerMaxHealth, _playerHealth + 0.5f);
+            if (_relics.Contains("空心瓜柄"))
+            {
+                foreach (Enemy enemy in _enemies.Where(enemy => enemy.Position.DistanceTo(plant.Position) < 55).ToArray())
+                    DamageEnemy(enemy, 18);
             }
         }
-    }
-
-    private void UpdateParticles(float dt)
-    {
-        for (int i = _particles.Count - 1; i >= 0; i--)
+        else
         {
-            Particle particle = _particles[i];
-            particle.Life -= dt;
-            particle.Position += particle.Velocity * dt;
-            particle.Velocity *= Mathf.Pow(0.04f, dt);
-            if (particle.Life <= 0) _particles.RemoveAt(i);
+            foreach (Enemy enemy in _enemies.Take(3).ToArray())
+                SpawnProjectile(plant.Position, plant.Position.DirectionTo(enemy.Position) * 140, 8, true, 12, 4, true);
         }
+        _plants.Remove(plant);
     }
 
-    private void AddParticle(Vector2 position, Vector2 velocity, float life, float size, Color color)
+    private void RefreshRecipes()
     {
-        _particles.Add(new Particle { Position = position, Velocity = velocity, Life = life, MaxLife = life, Size = size, Color = color });
-    }
-
-    private void Burst(Vector2 position, Color color, int count, float speed)
-    {
-        for (int i = 0; i < count; i++)
+        foreach (DesignRoom middle in _map.Rooms.Where(room => room.RootTag != RootTag.None))
         {
-            Vector2 velocity = Vector2.Right.Rotated(_rng.RandfRange(0, Mathf.Tau)) * _rng.RandfRange(speed * 0.35f, speed);
-            AddParticle(position, velocity, _rng.RandfRange(0.2f, 0.55f), _rng.RandfRange(1.5f, 3.5f), color);
-        }
-    }
-
-    private void OpenUpgradeChoice()
-    {
-        _state = RunState.Upgrade;
-        Input.MouseMode = Input.MouseModeEnum.Visible;
-        _upgradeChoices.Clear();
-        foreach (Upgrade choice in _upgradePool.OrderBy(_ => _rng.Randf()).Take(3))
-            _upgradeChoices.Add(choice);
-        _hoveredCard = 0;
-    }
-
-    private void UpdateUpgradeHover()
-    {
-        Vector2 mouse = GetLocalMousePosition();
-        for (int i = 0; i < 3; i++)
-            if (CardRect(i).HasPoint(mouse)) _hoveredCard = i;
-    }
-
-    private Rect2 CardRect(int index) => new(56 + index * 181, 105, 166, 142);
-
-    private void ChooseUpgrade(int index)
-    {
-        if (_state != RunState.Upgrade || index < 0 || index >= _upgradeChoices.Count) return;
-        Upgrade choice = _upgradeChoices[index];
-        switch (choice.Id)
-        {
-            case "damage": _damageMultiplier *= 1.25f; break;
-            case "firerate": _fireRateMultiplier *= 1.22f; break;
-            case "speed": _moveSpeedMultiplier *= 1.14f; break;
-            case "heart": _playerMaxHealth += 2; _playerHealth = Math.Min(_playerMaxHealth, _playerHealth + 2); break;
-            case "seeds": _maxSeedPods++; _seedPods = _maxSeedPods; break;
-            case "plant": _plantRateMultiplier *= 1.3f; break;
-            case "growth": _growthMultiplier *= 1.25f; break;
-            case "harvest": _harvestMultiplier *= 1.3f; break;
-            case "dew": _dewCooldownMultiplier *= 0.75f; break;
-            case "pierce": _bulletPierce++; break;
-        }
-        _room++;
-        PlaySound("upgrade");
-        _state = RunState.Playing;
-        Input.MouseMode = Input.MouseModeEnum.Hidden;
-        StartRoom();
-        ShowToast($"获得：{choice.Name}");
-    }
-
-    private void TogglePause()
-    {
-        if (_state == RunState.Playing)
-        {
-            _state = RunState.Paused;
-            Input.MouseMode = Input.MouseModeEnum.Visible;
-        }
-        else if (_state == RunState.Paused)
-        {
-            _state = RunState.Playing;
-            Input.MouseMode = Input.MouseModeEnum.Hidden;
-        }
-    }
-
-    private void ShowToast(string message)
-    {
-        _toast = message;
-        _toastTimer = 1.8f;
-    }
-
-    private void InitializeAudio()
-    {
-        EnsureAudioBus("Music");
-        EnsureAudioBus("SFX");
-
-        for (int i = 0; i < 8; i++)
-        {
-            AudioStreamPlayer player = new() { Bus = "SFX", VolumeDb = -9f };
-            AddChild(player);
-            _audioPlayers.Add(player);
-        }
-
-        for (int i = 0; i < 2; i++)
-        {
-            AudioStreamPlayer player = new() { Bus = "Music", VolumeDb = MusicSilentVolumeDb };
-            AddChild(player);
-            _musicPlayers.Add(player);
-        }
-
-        _sounds["shoot"] = CreateTone(510, 0.045f, 0.22f, 1.8f);
-        _sounds["plant"] = CreateTone(235, 0.11f, 0.28f, 1.7f);
-        _sounds["dew"] = CreateTone(340, 0.18f, 0.25f, 2.05f);
-        _sounds["harvest"] = CreateTone(620, 0.12f, 0.30f, 1.42f);
-        _sounds["pickup"] = CreateTone(790, 0.07f, 0.24f, 1.3f);
-        _sounds["hurt"] = CreateTone(105, 0.16f, 0.35f, 0.7f);
-        _sounds["clear"] = CreateTone(420, 0.28f, 0.26f, 2f);
-        _sounds["upgrade"] = CreateTone(540, 0.24f, 0.28f, 1.52f);
-
-        LoadMusic("menu", "res://assets/audio/music/menu.ogg", 0f);
-        LoadMusic("spring", "res://assets/audio/music/spring.ogg", 1f);
-        LoadMusic("boss", "res://assets/audio/music/boss.ogg", -7.5f);
-        PlayMusic("menu");
-    }
-
-    private static void EnsureAudioBus(StringName busName)
-    {
-        if (AudioServer.GetBusIndex(busName) >= 0) return;
-        AudioServer.AddBus();
-        AudioServer.SetBusName(AudioServer.BusCount - 1, busName);
-    }
-
-    private void LoadMusic(string id, string path, float gainDb)
-    {
-        AudioStream? stream = GD.Load<AudioStream>(path);
-        if (stream == null)
-        {
-            GD.PushWarning($"Music stream could not be loaded: {path}");
-            return;
-        }
-
-        if (stream is AudioStreamOggVorbis ogg)
-            ogg.Loop = true;
-
-        _musicTracks[id] = (stream, gainDb);
-    }
-
-    private void PlayMusic(string id)
-    {
-        if (!_musicTracks.TryGetValue(id, out (AudioStream Stream, float GainDb) track) || _musicPlayers.Count == 0)
-            return;
-
-        if (_currentMusic == id && _activeMusicIndex >= 0 && _musicPlayers[_activeMusicIndex].Playing)
-            return;
-
-        int nextIndex = _activeMusicIndex < 0 ? 0 : (_activeMusicIndex + 1) % _musicPlayers.Count;
-        AudioStreamPlayer next = _musicPlayers[nextIndex];
-        next.Stop();
-        next.Stream = track.Stream;
-        next.VolumeDb = MusicSilentVolumeDb;
-        next.Play();
-
-        _fadingMusicIndex = _activeMusicIndex;
-        _musicFadeOutStartDb = _fadingMusicIndex >= 0
-            ? _musicPlayers[_fadingMusicIndex].VolumeDb
-            : MusicSilentVolumeDb;
-        _activeMusicIndex = nextIndex;
-        _musicFadeInTargetDb = MusicBaseVolumeDb + track.GainDb;
-        _musicFadeElapsed = 0f;
-        _currentMusic = id;
-    }
-
-    private void UpdateMusic(float dt)
-    {
-        if (_activeMusicIndex < 0 || _musicPlayers.Count == 0) return;
-
-        _musicFadeElapsed += dt;
-        float t = Mathf.Clamp(_musicFadeElapsed / MusicCrossfadeSeconds, 0f, 1f);
-        float eased = t * t * (3f - 2f * t);
-        _musicPlayers[_activeMusicIndex].VolumeDb =
-            Mathf.Lerp(MusicSilentVolumeDb, _musicFadeInTargetDb, eased);
-
-        if (_fadingMusicIndex >= 0)
-        {
-            AudioStreamPlayer fading = _musicPlayers[_fadingMusicIndex];
-            fading.VolumeDb = Mathf.Lerp(_musicFadeOutStartDb, MusicSilentVolumeDb, eased);
-            if (t >= 1f)
+            foreach (DesignRoom left in middle.Connections.Select(_map.Room).Where(room => room.RootTag != RootTag.None))
             {
-                fading.Stop();
-                _fadingMusicIndex = -1;
+                foreach (DesignRoom right in middle.Connections.Select(_map.Room).Where(room => room.RootTag != RootTag.None && room.Id != left.Id))
+                {
+                    HashSet<RootTag> tags = [left.RootTag, middle.RootTag, right.RootTag];
+                    TryRecipe("雨后菌环", tags, RootTag.Wet, RootTag.Spore, RootTag.Attached);
+                    TryRecipe("焦土轮作", tags, RootTag.Burning, RootTag.Rooted, RootTag.Harvest);
+                    TryRecipe("月镜花圃", tags, RootTag.Moonlit, RootTag.Wet, RootTag.Rooted);
+                    TryRecipe("风中种路", tags, RootTag.Spore, RootTag.Rooted, RootTag.Harvest);
+                }
             }
         }
+
+        if (_recipes.Contains("风中种路") && !_map.Room(2).Connections.Contains(9))
+        {
+            _map.Room(2).Connections.Add(9);
+            _map.Room(9).Connections.Add(2);
+        }
     }
 
-    private static AudioStreamWav CreateTone(float frequency, float duration, float volume, float endPitch)
+    private void TryRecipe(string name, HashSet<RootTag> tags, params RootTag[] required)
     {
-        const int sampleRate = 22050;
-        int sampleCount = Math.Max(1, (int)(sampleRate * duration));
-        byte[] data = new byte[sampleCount * 2];
-        double phase = 0;
-        for (int i = 0; i < sampleCount; i++)
+        if (required.All(tags.Contains) && _recipes.Add(name))
         {
-            float t = i / (float)sampleCount;
-            float envelope = Mathf.Sin(Mathf.Pi * t) * (1f - t * 0.35f);
-            float pitch = Mathf.Lerp(1f, endPitch, t);
-            phase += Mathf.Tau * frequency * pitch / sampleRate;
-            float wave = (float)(Math.Sin(phase) * 0.72 + Math.Sin(phase * 2) * 0.18);
-            short sample = (short)Mathf.Clamp(wave * envelope * volume * short.MaxValue, short.MinValue, short.MaxValue);
-            data[i * 2] = (byte)(sample & 0xff);
-            data[i * 2 + 1] = (byte)((sample >> 8) & 0xff);
+            _score += 250;
+            ShowMessage($"生态配方完成：{name}");
         }
+    }
 
-        return new AudioStreamWav
+    private void TryPlant(Vector2 position)
+    {
+        if (_roomClear || _seedPods <= 0 || !Arena.HasPoint(position)) return;
+        if (SoilAt(position) == SoilType.Corrupted)
         {
-            Format = AudioStreamWav.FormatEnum.Format16Bits,
-            MixRate = sampleRate,
-            Stereo = false,
-            Data = data
+            ShowMessage("腐化地无法种植，先用晨露圈净化");
+            return;
+        }
+        if (_plants.Count >= 4 + (_relics.Contains("双月种盘") ? 2 : 0))
+            HarvestPlant(_plants[0]);
+        _seedPods--;
+        AddPlant(_seed, position, false);
+        _roomPlantsPlaced++;
+        _effects.Add(new Fx { Atlas = "atlas.ecology", Row = 0, Position = position, Size = 34 });
+    }
+
+    private void AddPlant(SeedType type, Vector2 position, bool mature)
+    {
+        _plants.Add(new Plant
+        {
+            Type = type,
+            Position = position,
+            Growth = mature ? GrowthTime(type) : 0,
+            Mature = mature,
+            AttackTimer = 0.3f
+        });
+    }
+
+    private void TryRoll()
+    {
+        if (_rollCooldown > 0) return;
+        Vector2 direction = _playerVelocity.LengthSquared() > 1 ? _playerVelocity.Normalized() : _aimDirection;
+        _playerVelocity = direction * 250;
+        _rollTime = 0.18f;
+        _invulnerability = Math.Max(_invulnerability, 0.18f);
+        _rollCooldown = 1.1f * (_contract == "禁翻" ? 1.5f : 1);
+        if (_relics.Contains("不漏水的靴子"))
+            _soil.Add(new SoilPatch { Type = SoilType.Wet, Position = _playerPosition, Radius = 23 });
+    }
+
+    private void UseDewRing()
+    {
+        if (_dewCooldown > 0) return;
+        _dewCooldown = _relics.Contains("旧铜喷头") ? 13 : 12;
+        float radius = _relics.Contains("旧铜喷头") ? 60 : 48;
+        _soil.RemoveAll(patch => patch.Type == SoilType.Corrupted && patch.Position.DistanceTo(_playerPosition) <= radius);
+        _soil.Add(new SoilPatch { Type = SoilType.Wet, Position = _playerPosition, Radius = radius });
+        foreach (Enemy enemy in _enemies.Where(enemy => enemy.Position.DistanceTo(_playerPosition) <= radius).ToArray())
+            enemy.Velocity += _playerPosition.DirectionTo(enemy.Position) * 90;
+        _effects.Add(new Fx { Atlas = "atlas.ecology", Row = 3, Position = _playerPosition, Size = radius * 2 });
+    }
+
+    private void DamageEnemy(Enemy enemy, float damage)
+    {
+        if (!_enemies.Contains(enemy)) return;
+        if (_relics.Contains("金色稻壳") && damage < 100 && _rng.Randf() < 0.12f)
+        {
+            damage *= 1.5f;
+            Plant? growing = _plants.Where(plant => !plant.Mature)
+                .OrderBy(plant => plant.Position.DistanceSquaredTo(enemy.Position))
+                .FirstOrDefault();
+            if (growing != null) growing.Growth += 0.45f;
+            _effects.Add(new Fx { Atlas = "atlas.impacts", Position = enemy.Position, Row = 2, Size = 38 });
+        }
+        enemy.Health -= damage;
+        enemy.Flash = 1;
+        _effects.Add(new Fx { Position = enemy.Position, Row = 0, Size = 28, Life = 0.18f, MaxLife = 0.18f });
+        if (enemy.Health > 0) return;
+        _enemies.Remove(enemy);
+        int drops = enemy.Type == EnemyType.LanternPumpkinKing ? 12 : _rng.RandiRange(1, 2);
+        for (int i = 0; i < drops; i++)
+            _pickups.Add(new Pickup { AtlasIndex = 0, Position = enemy.Position + new Vector2(_rng.RandfRange(-12, 12), _rng.RandfRange(-8, 8)) });
+        _effects.Add(new Fx { Position = enemy.Position, Row = 3, Size = enemy.Type == EnemyType.LanternPumpkinKing ? 96 : 42 });
+    }
+
+    private void HurtPlayer(Vector2 source, float damage)
+    {
+        if (_invulnerability > 0 || _rollTime > 0) return;
+        damage *= _difficulty switch { 0 => 0.75f, 2 => 1.35f, _ => 1 };
+        _playerHealth -= damage;
+        _roomDamageTaken++;
+        _invulnerability = 0.8f;
+        _playerVelocity += source.DirectionTo(_playerPosition) * 100;
+        if (_playerHealth <= 0)
+        {
+            _playerHealth = 0;
+            _screen = GameScreen.Result;
+            PlayMusic("res://assets/audio/music/menu.ogg");
+        }
+    }
+
+    private void SpawnProjectile(Vector2 position, Vector2 velocity, float damage, bool friendly, int atlasIndex, float radius, bool homing = false, bool heavy = false, float life = 3)
+    {
+        _projectiles.Add(new Projectile
+        {
+            Position = position,
+            Velocity = velocity,
+            Damage = damage,
+            Friendly = friendly,
+            AtlasIndex = atlasIndex,
+            Radius = radius,
+            Homing = homing,
+            Heavy = heavy,
+            Life = life
+        });
+    }
+
+    private Enemy? NearestEnemy(Vector2 position) =>
+        _enemies.OrderBy(enemy => enemy.Position.DistanceSquaredTo(position)).FirstOrDefault();
+
+    private SoilType SoilAt(Vector2 position) =>
+        _soil.Where(patch => patch.Position.DistanceTo(position) <= patch.Radius)
+            .OrderByDescending(patch => patch.Type == SoilType.Corrupted)
+            .Select(patch => patch.Type)
+            .FirstOrDefault();
+
+    private static float GrowthTime(SeedType seed) => seed switch
+    {
+        SeedType.Chili => 4,
+        SeedType.Pumpkin => 5.5f,
+        SeedType.Dandelion => 3.5f,
+        _ => 3
+    };
+
+    private RootTag RootTagFor(Plant plant)
+    {
+        SoilType soil = SoilAt(plant.Position);
+        if (soil == SoilType.Wet) return RootTag.Wet;
+        if (soil == SoilType.Moonlit) return RootTag.Moonlit;
+        return plant.Type switch
+        {
+            SeedType.Chili => RootTag.Burning,
+            SeedType.Pumpkin => RootTag.Rooted,
+            SeedType.Dandelion => RootTag.Spore,
+            _ => RootTag.Attached
         };
     }
 
-    private void PlaySound(string id)
+    private void OpenMap()
     {
-        if (!_sounds.TryGetValue(id, out AudioStreamWav? sound) || _audioPlayers.Count == 0) return;
-        AudioStreamPlayer player = _audioPlayers[_audioCursor++ % _audioPlayers.Count];
-        player.Stop();
-        player.Stream = sound;
-        player.Play();
+        _routeIndex = 0;
+        _screen = GameScreen.Map;
+    }
+
+    private List<DesignRoom> TravelOptions() => _map.Adjacent()
+        .Where(room => room.Type != RoomType.Hidden || _map.Current.Type == RoomType.Elite)
+        .OrderBy(room => room.Cleared)
+        .ThenBy(room => room.Id)
+        .ToList();
+
+    private void TravelSelected()
+    {
+        List<DesignRoom> routes = TravelOptions();
+        if (routes.Count == 0) return;
+        _routeIndex = Mathf.Clamp(_routeIndex, 0, routes.Count - 1);
+        EnterRoom(routes[_routeIndex].Id);
+    }
+
+    private void CycleContract()
+    {
+        List<DesignRoom> routes = TravelOptions();
+        if (routes.Count == 0) return;
+        DesignRoom target = routes[Mathf.Clamp(_routeIndex, 0, routes.Count - 1)];
+        if (target.Cleared || target.Type is not (RoomType.Combat or RoomType.Elite)) return;
+        string[] contracts = ["", "虫潮", "旱季", "禁翻", "腐土", "精英授粉"];
+        int index = Array.IndexOf(contracts, target.Contract);
+        target.Contract = contracts[(index + 1) % contracts.Length];
+    }
+
+    private void OpenReward()
+    {
+        _choiceIndex = 0;
+        _screen = GameScreen.Reward;
+    }
+
+    private string[] RewardChoices()
+    {
+        string[] pool =
+        [
+            "雨后豆荚", "旧铜喷头", "暖手石", "空心瓜柄",
+            "蜗牛时钟", "三齿小耙", "月下玻璃瓶", "不漏水的靴子",
+            "园丁的便签", "金色稻壳", "双月种盘", "倒栽花盆"
+        ];
+        Random random = new(CurrentRoom.RewardSeed);
+        return pool.OrderBy(_ => random.Next()).Where(name => !_relics.Contains(name)).Take(3).ToArray();
+    }
+
+    private void ApplyRelic(string relic)
+    {
+        if (relic == "三齿小耙") _maxSeedPods++;
+        if (relic == "金色稻壳") _playerHealth = Math.Min(_playerMaxHealth, _playerHealth + 1);
+    }
+
+    private void ResolveEvent()
+    {
+        CurrentRoom.RewardClaimed = true;
+        if ((CurrentRoom.RewardSeed & 1) == 0)
+        {
+            _moonDew += 8;
+            ShowMessage("井底回声：带走这些月露，别让根听见。");
+        }
+        else
+        {
+            _playerHealth = Math.Min(_playerMaxHealth, _playerHealth + 2);
+            ShowMessage("苔婆婆留下的心莓恢复了 2 点生命。");
+        }
+    }
+
+    private void CycleWeapon(int direction)
+    {
+        int count = Enum.GetValues<WeaponType>().Length;
+        _weapon = (WeaponType)Wrap((int)_weapon + direction, count);
+    }
+
+    private void CycleSeed(int direction)
+    {
+        int count = Enum.GetValues<SeedType>().Length;
+        _seed = (SeedType)Wrap((int)_seed + direction, count);
+    }
+
+    private static int Wrap(int value, int count) => count <= 0 ? 0 : (value % count + count) % count;
+
+    private string DifficultyName() => _difficulty switch
+    {
+        0 => "简单",
+        2 => "困难（参数入口）",
+        _ => "普通"
+    };
+
+    private static float ContractMultiplier(string contract) => contract switch
+    {
+        "虫潮" => 0.05f,
+        "旱季" => 0.08f,
+        "禁翻" => 0.10f,
+        "腐土" => 0.10f,
+        "精英授粉" => 0.15f,
+        _ => 0
+    };
+
+    private void HandleClick(Vector2 position)
+    {
+        if (_screen == GameScreen.Title)
+        {
+            _screen = GameScreen.Loadout;
+            return;
+        }
+        if (_screen == GameScreen.Loadout)
+        {
+            BeginRun();
+            return;
+        }
+        if (_screen == GameScreen.Map)
+        {
+            List<DesignRoom> routes = TravelOptions();
+            for (int i = 0; i < routes.Count; i++)
+            {
+                if (RouteCard(i, routes.Count).HasPoint(position))
+                {
+                    _routeIndex = i;
+                    TravelSelected();
+                    return;
+                }
+            }
+        }
+        if (_screen is GameScreen.HarvestChoice or GameScreen.Reward or GameScreen.Shop or GameScreen.Greenhouse)
+        {
+            for (int i = 0; i < 3; i++)
+                if (ChoiceCard(i).HasPoint(position)) ResolveChoice(i);
+        }
+    }
+
+    private void ShowMessage(string message)
+    {
+        _message = message;
+        _messageTimer = 3.2f;
+    }
+
+    private void InitializeMusic()
+    {
+        _music = new AudioStreamPlayer { VolumeDb = -14 };
+        AddChild(_music);
+    }
+
+    private void PlayMusic(string path)
+    {
+        if (_music == null) return;
+        AudioStream? stream = GD.Load<AudioStream>(path);
+        if (stream == null) return;
+        _music.Stop();
+        _music.Stream = stream;
+        _music.Play();
+    }
+
+    private void UpdateAutomation(float dt)
+    {
+        _automationTimer += dt;
+        if (_screen == GameScreen.Playing && _enemies.Count > 0)
+        {
+            Enemy target = _enemies[0];
+            _aimDirection = _playerPosition.DirectionTo(target.Position);
+            DamageEnemy(target, target.MaxHealth + 1);
+        }
+        if (_screen == GameScreen.Playing && _roomClear)
+            ResolveRoomExit();
+        if (_screen == GameScreen.HarvestChoice)
+            ResolveChoice(_map.CurrentRoomId % 2);
+        if (_screen == GameScreen.Reward)
+            ResolveChoice(0);
+        if (_screen == GameScreen.Map)
+        {
+            List<DesignRoom> routes = TravelOptions();
+            int nextRoomId = FindAutomationNextRoom();
+            int next = routes.FindIndex(room => room.Id == nextRoomId);
+            _routeIndex = next >= 0 ? next : 0;
+            TravelSelected();
+        }
+        if (_screen == GameScreen.Shop || _screen == GameScreen.Greenhouse)
+            OpenMap();
+        if (_screen == GameScreen.Result && _bossDefeated)
+        {
+            GD.Print($"DESIGN_SMOKE_TEST_OK rooms={_roomsCleared} boss={_bossDefeated} score={_score} map_nodes={_map.Rooms.Count}");
+            GetTree().Quit(0);
+            _automation = false;
+        }
+        if (_automationTimer > 30)
+        {
+            GD.Print($"DESIGN_SMOKE_TEST_FAILED screen={_screen} room={_map.CurrentRoomId}");
+            GetTree().Quit(1);
+            _automation = false;
+        }
+    }
+
+    private int FindAutomationNextRoom()
+    {
+        HashSet<int> targets = _map.Rooms
+            .Where(room => !room.Cleared && room.Type != RoomType.Boss)
+            .Select(room => room.Id)
+            .ToHashSet();
+        if (targets.Count == 0)
+            targets.Add(_map.Rooms.First(room => room.Type == RoomType.Boss).Id);
+
+        Queue<(int RoomId, int FirstStep)> frontier = new();
+        HashSet<int> visited = [_map.CurrentRoomId];
+        foreach (int neighbor in CurrentRoom.Connections)
+        {
+            frontier.Enqueue((neighbor, neighbor));
+            visited.Add(neighbor);
+        }
+
+        while (frontier.Count > 0)
+        {
+            (int roomId, int firstStep) = frontier.Dequeue();
+            if (targets.Contains(roomId))
+                return firstStep;
+            foreach (int neighbor in _map.Room(roomId).Connections)
+            {
+                if (visited.Add(neighbor))
+                    frontier.Enqueue((neighbor, firstStep));
+            }
+        }
+        return CurrentRoom.Connections.FirstOrDefault();
     }
 
     public override void _Draw()
     {
-        if (_state == RunState.Title)
+        switch (_screen)
         {
-            DrawTitle();
-            return;
+            case GameScreen.Title:
+                DrawTitle();
+                return;
+            case GameScreen.Loadout:
+                DrawLoadout();
+                return;
         }
 
-        DrawGameWorld();
+        DrawWorld();
         DrawHud();
 
-        if (_state == RunState.Upgrade) DrawUpgradeScreen();
-        if (_state == RunState.Paused) DrawPauseScreen();
-        if (_state == RunState.GameOver) DrawEndScreen(false);
-        if (_state == RunState.Victory) DrawEndScreen(true);
+        if (_screen == GameScreen.Map) DrawMap();
+        if (_screen == GameScreen.HarvestChoice) DrawHarvestChoice();
+        if (_screen == GameScreen.Reward) DrawReward();
+        if (_screen == GameScreen.Shop) DrawShop();
+        if (_screen == GameScreen.Greenhouse) DrawGreenhouse();
+        if (_screen == GameScreen.Pause) DrawPause();
+        if (_screen == GameScreen.Result) DrawResult();
+
+        if (_messageTimer > 0)
+        {
+            DrawMenuPanel(new Rect2(70, 226, 340, 34), 1);
+            Text(_message, new Vector2(80, 248), 10, Parchment, 320, HorizontalAlignment.Center);
+        }
     }
 
     private void DrawTitle()
     {
-        DrawRect(new Rect2(0, 0, Width, Height), Deep);
-        if (_titleTexture != null)
-            DrawTextureRect(_titleTexture, new Rect2(0, 0, Width, Height), false, new Color(1, 1, 1, 0.78f));
-        DrawRect(new Rect2(0, 0, Width, Height), new Color(Deep, 0.28f));
-        DrawRect(new Rect2(0, 0, Width, 58), new Color(Deep, 0.72f));
-        DrawRect(new Rect2(0, 303, Width, 57), new Color(Deep, 0.82f));
-
-        Panel(new Rect2(154, 68, 332, 104), new Color(Deep, 0.88f), Honey);
-        Text("月 根 秘 境", new Vector2(170, 117), 31, Parchment, 300, HorizontalAlignment.Center);
-        Text("MOONROOT HOLLOW", new Vector2(170, 143), 10, MoonCyan, 300, HorizontalAlignment.Center);
-        Text("在月光侵蚀的地下农庄，种下你的战斗方式", new Vector2(160, 165), 12, Parchment.Darkened(0.08f), 320, HorizontalAlignment.Center);
-
-        Rect2 start = new(236, 248, 168, 38);
-        bool hover = start.HasPoint(GetLocalMousePosition());
-        Panel(start, hover ? Wood.Lightened(0.16f) : Wood.Darkened(0.05f), hover ? Parchment : Honey);
-        Text("开始下潜", new Vector2(start.Position.X, start.Position.Y + 25), 16, Parchment, start.Size.X, HorizontalAlignment.Center);
-        Text("Enter / 点击", new Vector2(0, 299), 10, new Color(Parchment, 0.8f), Width, HorizontalAlignment.Center);
-        Text("WASD 移动 · 鼠标瞄准 · 左键射击 · 右键播种", new Vector2(0, 334), 11, new Color(Parchment, 0.82f), Width, HorizontalAlignment.Center);
+        DrawTextureRect(_assets["title"], new Rect2(0, 0, Width, Height), false, new Color(1, 1, 1, 0.9f));
+        DrawRect(new Rect2(0, 0, Width, Height), new Color(Deep, 0.24f));
+        DrawMenuPanel(new Rect2(92, 31, 296, 203), 0);
+        Text("月 根 秘 境", new Vector2(110, 87), 28, Parchment, 260, HorizontalAlignment.Center);
+        Text("MOONROOT HOLLOW", new Vector2(110, 108), 9, Cyan, 260, HorizontalAlignment.Center);
+        DrawMenuButton(new Rect2(155, 136, 170, 36), true);
+        Text("开始新旅程", new Vector2(155, 160), 14, Parchment, 170, HorizontalAlignment.Center);
+        DrawMenuButton(new Rect2(155, 178, 170, 32), false);
+        Text("继续游戏", new Vector2(155, 200), 12, new Color(Parchment, 0.52f), 170, HorizontalAlignment.Center);
+        Text("Enter / 点击", new Vector2(0, 249), 10, Parchment, Width, HorizontalAlignment.Center);
+        DrawGridCell("atlas.npcs", 2, 2, 0, 0, new Rect2(25, 157, 82, 82), new Color(1, 1, 1, 0.78f));
+        DrawGridCell("atlas.npcs", 2, 2, 1, 1, new Rect2(374, 158, 80, 80), new Color(1, 1, 1, 0.78f));
     }
 
-    private void DrawGameWorld()
+    private void DrawLoadout()
     {
-        Vector2 shake = Vector2.Zero;
-        if (_screenShake > 0.1f)
-            shake = new Vector2(_rng.RandfRange(-_screenShake, _screenShake), _rng.RandfRange(-_screenShake, _screenShake)).Round();
-
-        DrawRect(new Rect2(0, 0, Width, Height), Deep);
-        DrawRect(new Rect2(Arena.Position + shake, Arena.Size), Soil.Darkened(0.28f));
-
-        for (int y = 48; y < 328; y += 16)
-        {
-            for (int x = 38; x < 602; x += 16)
-            {
-                bool alternate = ((x / 16 + y / 16 + _room) & 1) == 0;
-                Color tile = alternate ? Soil.Darkened(0.18f) : Soil.Darkened(0.23f);
-                DrawRect(new Rect2(new Vector2(x, y) + shake, new Vector2(16, 16)), tile);
-                DrawLine(new Vector2(x, y + 15) + shake, new Vector2(x + 15, y + 15) + shake, new Color(Deep, 0.13f), 1);
-            }
-        }
-
-        DrawWalls(shake);
-        DrawDecor(shake);
-
-        foreach (WetPatch wet in _wetPatches)
-        {
-            float alpha = Mathf.Clamp(wet.Life / 2, 0.1f, 0.34f);
-            DrawCircle(wet.Position + shake, wet.Radius, new Color(MoonCyan, alpha));
-            DrawArc(wet.Position + shake, wet.Radius - 2, 0, Mathf.Tau, 32, new Color(MoonBlue, 0.8f), 1.5f);
-        }
-
-        if (_roomClear && _clearTimer > 0.25f)
-            DrawPortal(new Vector2(320, 69) + shake);
-
-        foreach (Plant plant in _plants) DrawPlant(plant, shake);
-        foreach (Pickup pickup in _pickups) DrawPickup(pickup, shake);
-        foreach (Enemy enemy in _enemies) DrawEnemy(enemy, shake);
-        foreach (Projectile projectile in _projectiles) DrawProjectile(projectile, shake);
-        DrawPlayer(shake);
-        foreach (Particle particle in _particles) DrawParticle(particle, shake);
-
-        if (_roomIntroTimer > 0)
-        {
-            float alpha = Mathf.Clamp(_roomIntroTimer * 2, 0, 1);
-            string name = _room == 5 ? "根窟深处 · 灯笼南瓜王" : $"苔灯地窖 · 房间 {_room}";
-            Text(name, new Vector2(0, 185), 17, new Color(Parchment, alpha), Width, HorizontalAlignment.Center);
-        }
-
-        if (_hurtVignette > 0)
-        {
-            Color hurt = new(HealthRed, _hurtVignette * 0.32f);
-            DrawRect(new Rect2(0, 0, Width, 9), hurt);
-            DrawRect(new Rect2(0, Height - 9, Width, 9), hurt);
-            DrawRect(new Rect2(0, 0, 9, Height), hurt);
-            DrawRect(new Rect2(Width - 9, 0, 9, Height), hurt);
-        }
+        DrawTextureRect(_assets["room.greenhouse"], new Rect2(0, 0, Width, Height), false, new Color(0.7f, 0.76f, 0.82f));
+        DrawRect(new Rect2(0, 0, Width, Height), new Color(Deep, 0.46f));
+        DrawMenuPanel(new Rect2(50, 24, 380, 220), 0);
+        Text("出发前的守圃准备", new Vector2(70, 58), 18, Parchment, 340, HorizontalAlignment.Center);
+        DrawCharacter("player", new Vector2(120, 78), 100, 118);
+        DrawWeaponSprite(_weapon, new Vector2(270, 89), 74);
+        DrawPlantCell(_seed, 3, new Rect2(329, 99, 64, 64));
+        DrawGridCell("atlas.npcs", 2, 2, 0, 0, new Rect2(55, 138, 72, 72));
+        DrawGridCell("atlas.challenge", 4, 4, _difficulty, 0, new Rect2(366, 35, 48, 48));
+        Text($"A / D  主工具：{DesignNames.Weapon(_weapon)}", new Vector2(218, 181), 11, Cyan);
+        Text($"W / S  主种子：{DesignNames.Seed(_seed)}", new Vector2(218, 201), 11, Sprout);
+        Text($"K  难度：{DifficultyName()}", new Vector2(300, 68), 8, Honey);
+        Text("莱芽 · 耐心栽培 / 晨露圈", new Vector2(80, 222), 10, Parchment);
+        Text("Enter 开始下潜", new Vector2(265, 226), 11, Honey);
     }
 
-    private void DrawWalls(Vector2 offset)
+    private void DrawWorld()
     {
-        Color wall = DeepBlue.Lightened(0.04f);
-        Color top = MoonBlue.Darkened(0.25f);
-        DrawRect(new Rect2(offset, new Vector2(Width, 48)), Deep);
-        DrawRect(new Rect2(new Vector2(0, 328) + offset, new Vector2(Width, 32)), Deep);
-        DrawRect(new Rect2(new Vector2(0, 48) + offset, new Vector2(38, 280)), Deep);
-        DrawRect(new Rect2(new Vector2(602, 48) + offset, new Vector2(38, 280)), Deep);
-
-        for (int x = 30; x < 614; x += 24)
+        string background = CurrentRoom.Type switch
         {
-            DrawRect(new Rect2(new Vector2(x, 36 + (x / 24 % 2) * 3) + offset, new Vector2(22, 14)), wall);
-            DrawLine(new Vector2(x + 2, 39) + offset, new Vector2(x + 19, 39) + offset, top, 2);
-        }
-        for (int x = 30; x < 614; x += 22)
-            DrawRect(new Rect2(new Vector2(x, 326) + offset, new Vector2(20, 12)), wall);
-
-        DrawLine(Arena.Position + offset, new Vector2(Arena.End.X, Arena.Position.Y) + offset, Wood.Darkened(0.25f), 3);
-        DrawLine(new Vector2(Arena.Position.X, Arena.End.Y) + offset, Arena.End + offset, Wood.Darkened(0.35f), 3);
-    }
-
-    private void DrawDecor(Vector2 offset)
-    {
-        foreach ((Vector2 pos, int kind) in _decor)
-        {
-            Vector2 p = pos + offset;
-            switch (kind)
-            {
-                case 0:
-                    DrawRect(new Rect2(p, new Vector2(3, 2)), Soil.Lightened(0.14f));
-                    break;
-                case 1:
-                    DrawCircle(p, 1.5f, MoonBlue.Darkened(0.2f));
-                    break;
-                case 2:
-                    DrawLine(p, p + new Vector2(0, -4), Moss, 1);
-                    DrawRect(new Rect2(p + new Vector2(-2, -4), new Vector2(2, 2)), SproutGreen.Darkened(0.18f));
-                    break;
-                case 3:
-                    DrawRect(new Rect2(p, new Vector2(4, 3)), Wood.Darkened(0.28f));
-                    break;
-                case 4:
-                    DrawCircle(p, 2, new Color(MoonCyan, 0.22f));
-                    break;
-            }
-        }
-    }
-
-    private void DrawPortal(Vector2 position)
-    {
-        float pulse = 1 + Mathf.Sin(_time * 4) * 0.12f;
-        DrawCircle(position, 20 * pulse, new Color(MoonCyan, 0.12f));
-        DrawArc(position, 13 * pulse, 0, Mathf.Tau, 20, MoonCyan, 2);
-        DrawArc(position, 8 / pulse, 0, Mathf.Tau, 16, Honey, 2);
-        DrawRect(new Rect2(position + new Vector2(-2, -2), new Vector2(4, 4)), Parchment);
-        if (_playerPosition.DistanceTo(new Vector2(320, 69)) < 44)
-            Text(_room == 5 ? "E  返回温室" : "E  穿过根门", new Vector2(position.X - 58, position.Y + 31), 11, Parchment, 116, HorizontalAlignment.Center);
-    }
-
-    private void DrawPlayer(Vector2 offset)
-    {
-        Vector2 p = (_playerPosition + offset).Round();
-        float blink = _invulnerability > 0 ? (Mathf.Sin(_time * 35) > 0 ? 0.38f : 1f) : 1f;
-        Color body = new(MoonCyan, blink);
-        Color hair = new(Pumpkin, blink);
-        Color skin = new(Parchment.Darkened(0.12f), blink);
-        Color outline = new(Deep, blink);
-
-        DrawRect(new Rect2(p + new Vector2(-7, 8), new Vector2(5, 4)), new Color(outline, 0.45f));
-        DrawRect(new Rect2(p + new Vector2(2, 8), new Vector2(5, 4)), new Color(outline, 0.45f));
-        DrawRect(new Rect2(p + new Vector2(-6, 1), new Vector2(12, 10)), outline);
-        DrawRect(new Rect2(p + new Vector2(-5, 1), new Vector2(10, 8)), body.Darkened(0.2f));
-        DrawRect(new Rect2(p + new Vector2(-7, -8), new Vector2(14, 11)), outline);
-        DrawRect(new Rect2(p + new Vector2(-5, -7), new Vector2(10, 8)), skin);
-        DrawRect(new Rect2(p + new Vector2(-7, -9), new Vector2(13, 5)), hair);
-        DrawRect(new Rect2(p + new Vector2(-8, -7), new Vector2(4, 6)), hair.Darkened(0.18f));
-        DrawRect(new Rect2(p + new Vector2(-6, 0), new Vector2(12, 3)), body);
-        Vector2 staffEnd = p + _aimDirection * 17;
-        DrawLine(p + _aimDirection * 4, staffEnd, Wood.Lightened(0.12f), 2);
-        DrawCircle(staffEnd, 3, SproutGreen);
-        DrawRect(new Rect2(staffEnd + new Vector2(-1, -5), new Vector2(2, 4)), SproutGreen.Lightened(0.22f));
-    }
-
-    private void DrawEnemy(Enemy enemy, Vector2 offset)
-    {
-        Vector2 p = (enemy.Position + offset).Round();
-        Color flash = enemy.Flash > 0 ? Parchment : Color.FromHtml("#00000000");
-        float bob = Mathf.Sin(enemy.Phase * 4) * 1.5f;
-
-        if (enemy.Kind == EnemyKind.Sprout)
-        {
-            DrawRect(new Rect2(p + new Vector2(-8, 7), new Vector2(16, 3)), new Color(Deep, 0.5f));
-            DrawCircle(p + new Vector2(0, bob), 9, enemy.Flash > 0 ? flash : Moss.Lightened(0.05f));
-            DrawRect(new Rect2(p + new Vector2(-5, -9 + bob), new Vector2(4, 7)), SproutGreen);
-            DrawRect(new Rect2(p + new Vector2(1, -10 + bob), new Vector2(5, 5)), SproutGreen.Lightened(0.14f));
-            DrawRect(new Rect2(p + new Vector2(-4, -1 + bob), new Vector2(2, 2)), Deep);
-            DrawRect(new Rect2(p + new Vector2(3, -1 + bob), new Vector2(2, 2)), Deep);
-        }
-        else if (enemy.Kind == EnemyKind.Radish)
-        {
-            DrawRect(new Rect2(p + new Vector2(-8, 8), new Vector2(16, 3)), new Color(Deep, 0.5f));
-            DrawCircle(p + new Vector2(0, bob), 9, enemy.Flash > 0 ? flash : HealthRed.Lightened(0.13f));
-            for (int i = -1; i <= 1; i++)
-                DrawLine(p + new Vector2(i * 3, -7 + bob), p + new Vector2(i * 5, -14 + bob), SproutGreen, 2);
-            DrawRect(new Rect2(p + new Vector2(-4, -2 + bob), new Vector2(2, 2)), Deep);
-            DrawRect(new Rect2(p + new Vector2(3, -2 + bob), new Vector2(2, 2)), Deep);
-        }
-        else if (enemy.Kind == EnemyKind.Beetle)
-        {
-            Color shell = enemy.Flash > 0 ? flash : (enemy.Charging ? Pumpkin.Lightened(0.2f) : MoonBlue);
-            DrawRect(new Rect2(p + new Vector2(-11, 7), new Vector2(22, 4)), new Color(Deep, 0.5f));
-            DrawCircle(p, 11, Deep);
-            DrawRect(new Rect2(p + new Vector2(-9, -7), new Vector2(18, 14)), shell);
-            DrawLine(p + new Vector2(0, -7), p + new Vector2(0, 7), DeepBlue, 2);
-            DrawRect(new Rect2(p + new Vector2(-7, -5), new Vector2(3, 3)), Honey.Darkened(0.12f));
-        }
-        else
-        {
-            Color boss = enemy.Flash > 0 ? flash : Pumpkin;
-            float squish = 1 + Mathf.Sin(enemy.Phase * 3) * 0.04f;
-            DrawCircle(p + new Vector2(0, 18), 28, new Color(Deep, 0.55f));
-            DrawCircle(p, 29 * squish, Deep);
-            DrawCircle(p, 26 * squish, boss);
-            DrawRect(new Rect2(p + new Vector2(-4, -34), new Vector2(8, 13)), Moss);
-            DrawRect(new Rect2(p + new Vector2(-16, -4), new Vector2(8, 10)), Deep);
-            DrawRect(new Rect2(p + new Vector2(8, -4), new Vector2(8, 10)), Deep);
-            DrawRect(new Rect2(p + new Vector2(-10, 13), new Vector2(20, 4)), Pumpkin.Darkened(0.35f));
-            DrawRect(new Rect2(p + new Vector2(-13, -1), new Vector2(3, 4)), Honey);
-            DrawRect(new Rect2(p + new Vector2(10, -1), new Vector2(3, 4)), Honey);
-        }
-    }
-
-    private void DrawPlant(Plant plant, Vector2 offset)
-    {
-        Vector2 p = (plant.Position + offset).Round();
-        DrawRect(new Rect2(p + new Vector2(-7, 5), new Vector2(14, 4)), new Color(Deep, 0.42f));
-        if (!plant.Mature)
-        {
-            int stage = Mathf.Clamp((int)(plant.Growth / 0.82f), 0, 3);
-            float height = 3 + stage * 3;
-            DrawLine(p + new Vector2(0, 5), p + new Vector2(0, 5 - height), SproutGreen.Darkened(0.15f), 2);
-            if (stage >= 1) DrawRect(new Rect2(p + new Vector2(-4, 1 - height / 2), new Vector2(4, 3)), SproutGreen);
-            if (stage >= 2) DrawRect(new Rect2(p + new Vector2(1, -2 - height / 2), new Vector2(5, 3)), SproutGreen.Lightened(0.1f));
-            DrawCircle(p + new Vector2(0, 5 - height), 2 + stage * 0.6f, MoonCyan);
-        }
-        else
-        {
-            float pulse = 1 + Mathf.Sin(plant.Pulse * 7) * 0.12f;
-            DrawLine(p + new Vector2(0, 6), p + new Vector2(0, -10), SproutGreen.Darkened(0.18f), 3);
-            DrawCircle(p + new Vector2(-5, -5), 5 * pulse, SproutGreen);
-            DrawCircle(p + new Vector2(5, -7), 5 * pulse, SproutGreen.Lightened(0.12f));
-            DrawCircle(p + new Vector2(0, -12), 4 * pulse, MoonCyan);
-            if (_playerPosition.DistanceTo(plant.Position) < 42)
-                Text("E 收割", new Vector2(p.X - 28, p.Y + 24), 9, Honey, 56, HorizontalAlignment.Center);
-        }
-    }
-
-    private void DrawProjectile(Projectile projectile, Vector2 offset)
-    {
-        Vector2 p = (projectile.Position + offset).Round();
-        if (projectile.Friendly)
-        {
-            DrawCircle(p, projectile.Radius + 2, new Color(projectile.Color, 0.18f));
-            DrawCircle(p, projectile.Radius, projectile.Color);
-            DrawRect(new Rect2(p + new Vector2(-1, -1), new Vector2(2, 2)), Parchment);
-        }
-        else
-        {
-            DrawCircle(p, projectile.Radius + 2, new Color(Pumpkin, 0.18f));
-            DrawRect(new Rect2(p + new Vector2(-projectile.Radius, -projectile.Radius), new Vector2(projectile.Radius * 2, projectile.Radius * 2)), Pumpkin);
-            DrawRect(new Rect2(p + new Vector2(-1, -1), new Vector2(2, 2)), Honey);
-        }
-    }
-
-    private void DrawPickup(Pickup pickup, Vector2 offset)
-    {
-        Vector2 p = (pickup.Position + offset + new Vector2(0, Mathf.Sin(_time * 5 + pickup.Position.X) * 2)).Round();
-        Color color = pickup.Kind switch
-        {
-            PickupKind.MoonDew => Honey,
-            PickupKind.SeedPod => SproutGreen,
-            PickupKind.Heart => HealthRed,
-            _ => Parchment
+            RoomType.Boss => "room.boss",
+            RoomType.Shop => "room.shop",
+            RoomType.Greenhouse => "room.greenhouse",
+            _ => "room.combat"
         };
-        DrawCircle(p, 6, new Color(color, 0.18f));
-        if (pickup.Kind == PickupKind.Heart)
+        DrawTextureRect(_assets[background], new Rect2(0, 0, Width, Height), false);
+        DrawRect(new Rect2(0, 0, Width, Height), new Color(Deep, CurrentRoom.Type == RoomType.Boss && _enemies.Any(enemy => enemy.Health / enemy.MaxHealth < 0.65f) ? 0.30f : 0.08f));
+
+        foreach (SoilPatch patch in _soil) DrawSoil(patch);
+        foreach (Trap trap in _traps) DrawTrap(trap);
+        foreach (Plant plant in _plants) DrawPlant(plant);
+        foreach (Pickup pickup in _pickups) DrawPickup(pickup);
+        foreach (Enemy enemy in _enemies) DrawEnemy(enemy);
+        foreach (Projectile projectile in _projectiles) DrawProjectile(projectile);
+        DrawWeapon();
+        DrawPlayer();
+        foreach (Fx effect in _effects) DrawEffect(effect);
+
+        if (_roomClear)
+            DrawInteractCell(2, 2, new Rect2(216, 42, 48, 48), new Color(1, 1, 1, 0.88f + Mathf.Sin(_time * 5) * 0.1f));
+    }
+
+    private void DrawPlayer()
+    {
+        float alpha = _invulnerability > 0 && Mathf.Sin(_time * 34) > 0 ? 0.42f : 1;
+        Rect2 rect = new(_playerPosition.X - 31, _playerPosition.Y - 43 + Mathf.Sin(_time * 8) * 0.8f, 62, 62);
+        DrawTextureRect(_assets["player"], rect, false, new Color(1, 1, 1, alpha));
+    }
+
+    private void DrawWeapon()
+    {
+        int direction = DirectionIndex(_aimDirection);
+        int row = (int)_weapon;
+        Rect2 rect = new(_playerPosition.X - 22 + _aimDirection.X * 9, _playerPosition.Y - 28 + _aimDirection.Y * 7, 44, 44);
+        DrawGridCell("atlas.weapons", 4, 3, direction, row, rect);
+        if (_weapon == WeaponType.MoonSickle && _weaponEffect > 0)
         {
-            DrawCircle(p + new Vector2(-2, -1), 3, color);
-            DrawCircle(p + new Vector2(2, -1), 3, color);
-            DrawRect(new Rect2(p + new Vector2(-3, 0), new Vector2(6, 4)), color);
+            int frame = Mathf.Clamp(3 - Mathf.FloorToInt(_weaponEffect / 0.22f * 4), 0, 3);
+            DrawGridCell("atlas.melee", 4, 4, frame, 0, new Rect2(_playerPosition.X - 48, _playerPosition.Y - 48, 96, 96));
         }
-        else
+        if (_weapon == WeaponType.SunWaterer && _weaponEffect > 0)
         {
-            DrawRect(new Rect2(p + new Vector2(-3, -3), new Vector2(6, 6)), color);
-            DrawRect(new Rect2(p + new Vector2(-1, -5), new Vector2(2, 2)), Parchment);
+            Vector2 end = _playerPosition + _aimDirection * 190;
+            float angle = _aimDirection.Angle();
+            DrawSetTransform(_playerPosition, angle, Vector2.One);
+            DrawGridCell("atlas.laser", 4, 4, Mathf.FloorToInt(_time * 12) % 4, 0, new Rect2(0, -13, 190, 26), new Color(1, 1, 1, 0.92f));
+            DrawSetTransform(Vector2.Zero, 0, Vector2.One);
         }
     }
 
-    private void DrawParticle(Particle particle, Vector2 offset)
+    private void DrawTrap(Trap trap)
     {
-        float alpha = Mathf.Clamp(particle.Life / particle.MaxLife, 0, 1);
-        float size = Math.Max(1, particle.Size * alpha);
-        DrawRect(new Rect2((particle.Position + offset).Round(), new Vector2(size, size)), new Color(particle.Color, alpha));
+        int state = trap.Cooldown < 0.45f ? 2 : trap.Cooldown < 1.1f ? 1 : 0;
+        float pulse = state == 2 ? 1f + Mathf.Sin(_time * 14) * 0.08f : 1f;
+        float size = 46 * pulse;
+        DrawGridCell("atlas.traps", 4, 4, state, trap.Kind,
+            new Rect2(trap.Position.X - size / 2, trap.Position.Y - size / 2, size, size));
+    }
+
+    private void DrawEnemy(Enemy enemy)
+    {
+        string key = enemy.Type switch
+        {
+            EnemyType.SpikeRadish => "enemy.radish",
+            EnemyType.ShellBeetle => "enemy.beetle",
+            EnemyType.SeedThief => "enemy.thief",
+            EnemyType.EliteRadish => "enemy.elite",
+            EnemyType.LanternPumpkinKing => "boss.spring",
+            _ => "enemy.sprout"
+        };
+        float size = enemy.Type switch
+        {
+            EnemyType.EliteRadish => 84,
+            EnemyType.LanternPumpkinKing => 188,
+            EnemyType.ShellBeetle => 78,
+            _ => 70
+        };
+        float bob = Mathf.Sin(enemy.Phase * 5) * 1.2f;
+        if (enemy.Type == EnemyType.LanternPumpkinKing && enemy.Health / enemy.MaxHealth < 0.3f)
+        {
+            for (int i = -1; i <= 1; i++)
+            {
+                float splitSize = 118;
+                Vector2 splitPosition = enemy.Position + new Vector2(i * 68, Math.Abs(i) * 15);
+                Rect2 splitRect = new(splitPosition.X - splitSize / 2, splitPosition.Y - splitSize * 0.62f + bob, splitSize, splitSize);
+                DrawTextureRect(_assets[key], splitRect, false, enemy.Flash > 0 ? new Color(1, 0.72f, 0.72f) : Colors.White);
+            }
+            return;
+        }
+        Rect2 rect = new(enemy.Position.X - size / 2, enemy.Position.Y - size * 0.62f + bob, size, size);
+        Color modulate = enemy.Flash > 0 ? new Color(1, 0.72f, 0.72f) : Colors.White;
+        DrawTextureRect(_assets[key], rect, false, modulate);
+        if (enemy.Type == EnemyType.ShellBeetle && enemy.Charging)
+            DrawGridCell("atlas.telegraph", 4, 4, 2, 2, new Rect2(enemy.Position.X - 30, enemy.Position.Y - 30, 60, 60), new Color(1, 0.65f, 0.45f, 0.8f));
+    }
+
+    private void DrawPlant(Plant plant)
+    {
+        int stage = plant.Mature ? 3 : Mathf.Clamp((int)(plant.Growth / GrowthTime(plant.Type) * 3), 0, 2);
+        DrawPlantCell(plant.Type, stage, new Rect2(plant.Position.X - 25, plant.Position.Y - 31, 50, 50));
+        if (plant.Mature)
+            DrawArc(plant.Position, 17 + Mathf.Sin(_time * 5), 0, Mathf.Tau, 20, new Color(Honey, 0.65f), 1.5f);
+    }
+
+    private void DrawProjectile(Projectile projectile)
+    {
+        int column = projectile.AtlasIndex % 4;
+        int row = projectile.AtlasIndex / 4;
+        float size = projectile.Heavy ? 30 : projectile.Friendly ? 22 : 25;
+        Color modulate = projectile.Friendly ? Colors.White : new Color(1, 0.72f, 0.68f);
+        DrawGridCell("atlas.projectiles", 4, 4, column, row, new Rect2(projectile.Position.X - size / 2, projectile.Position.Y - size / 2, size, size), modulate);
+    }
+
+    private void DrawPickup(Pickup pickup)
+    {
+        int column = pickup.AtlasIndex % 4;
+        int row = pickup.AtlasIndex / 4;
+        Vector2 position = pickup.Position + new Vector2(0, Mathf.Sin(_time * 5 + pickup.Position.X) * 2);
+        DrawGridCell("atlas.pickups", 4, 4, column, row, new Rect2(position.X - 19, position.Y - 19, 38, 38));
+    }
+
+    private void DrawEffect(Fx effect)
+    {
+        int frame = Mathf.Clamp(3 - Mathf.CeilToInt(effect.Life / effect.MaxLife * 4), 0, 3);
+        float alpha = Mathf.Clamp(effect.Life / effect.MaxLife, 0.15f, 1);
+        DrawGridCell(effect.Atlas, 4, 4, frame, effect.Row, new Rect2(effect.Position.X - effect.Size / 2, effect.Position.Y - effect.Size / 2, effect.Size, effect.Size), new Color(1, 1, 1, alpha));
+    }
+
+    private void DrawSoil(SoilPatch patch)
+    {
+        Color color = patch.Type switch
+        {
+            SoilType.Wet => new Color(Cyan, 0.24f),
+            SoilType.Fertile => new Color(Honey, 0.22f),
+            SoilType.Moonlit => new Color(MoonViolet, 0.24f),
+            SoilType.Corrupted => new Color(0.55f, 0.12f, 0.36f, 0.30f),
+            _ => new Color(SoilBrown, 0.2f)
+        };
+        DrawCircle(patch.Position, patch.Radius, color);
+        int networkIndex = patch.Type switch
+        {
+            SoilType.Wet => 0,
+            SoilType.Moonlit => 4,
+            SoilType.Corrupted => 5,
+            _ => 3
+        };
+        DrawGridCell("atlas.network", 4, 4, networkIndex % 4, networkIndex / 4, new Rect2(patch.Position.X - 21, patch.Position.Y - 21, 42, 42), new Color(1, 1, 1, 0.35f));
     }
 
     private void DrawHud()
     {
-        Panel(new Rect2(12, 10, 175, 31), new Color(Deep, 0.88f), Wood.Darkened(0.1f));
-        for (int i = 0; i < Mathf.CeilToInt(_playerMaxHealth / 2); i++)
-        {
-            float amount = Mathf.Clamp(_playerHealth - i * 2, 0, 2);
-            DrawHeart(new Vector2(25 + i * 22, 24), amount);
-        }
+        DrawHudRegion(new Rect2(7, 5, 42, 42), new Rect2(55, 35, 235, 220));
+        DrawHudRegion(new Rect2(45, 6, 142, 31), new Rect2(370, 55, 550, 125));
+        DrawHudRegion(new Rect2(50, 11, 132 * Mathf.Clamp(_playerHealth / _playerMaxHealth, 0, 1), 18), new Rect2(995, 72, 480 * Mathf.Clamp(_playerHealth / _playerMaxHealth, 0, 1), 90));
+        DrawCharacter("player", new Vector2(7, 3), 44, 44);
+        Text($"{_playerHealth:0.0}/{_playerMaxHealth:0}", new Vector2(65, 27), 9, Parchment);
 
-        Panel(new Rect2(254, 9, 132, 32), new Color(Deep, 0.88f), Wood.Darkened(0.1f));
-        Text(_room == 5 ? "灯笼王庭" : $"苔灯地窖  {_room}/5", new Vector2(254, 30), 12, Parchment, 132, HorizontalAlignment.Center);
+        DrawHudRegion(new Rect2(190, 5, 150, 34), new Rect2(60, 405, 1420, 130));
+        Text(CurrentRoom.Type == RoomType.Boss ? "灯笼南瓜王" : $"春·苔灯地窖  {DesignNames.Room(CurrentRoom.Type)}", new Vector2(195, 22), 9, Parchment, 140, HorizontalAlignment.Center);
+        Text($"{DesignNames.Weather(CurrentRoom.Weather)} · 房间 {CurrentRoom.Id:00}", new Vector2(195, 34), 7, Cyan, 140, HorizontalAlignment.Center);
 
-        Panel(new Rect2(459, 10, 169, 31), new Color(Deep, 0.88f), Wood.Darkened(0.1f));
-        Text($"◆ {_moonDew:00}", new Vector2(472, 31), 13, Honey);
-        Text($"种荚 {_seedPods}/{_maxSeedPods}", new Vector2(535, 31), 12, SproutGreen);
+        DrawHudRegion(new Rect2(352, 5, 120, 34), new Rect2(1090, 585, 360, 135));
+        DrawGridCell("atlas.icons", 4, 4, 3, 0, new Rect2(359, 9, 24, 24));
+        Text($"{_moonDew:00}", new Vector2(382, 26), 10, Honey);
+        DrawGridCell("atlas.icons", 4, 4, 1, 1, new Rect2(411, 9, 24, 24));
+        Text($"{_seedPods}/{_maxSeedPods}", new Vector2(435, 26), 9, Sprout);
 
-        Enemy? boss = _enemies.FirstOrDefault(e => e.Kind == EnemyKind.Boss);
+        DrawHudRegion(new Rect2(7, 221, 190, 44), new Rect2(55, 550, 560, 205));
+        DrawWeaponSprite(_weapon, new Vector2(13, 220), 42);
+        Text(DesignNames.Weapon(_weapon), new Vector2(58, 242), 9, Parchment);
+        Text("R 切换", new Vector2(58, 255), 7, Cyan);
+
+        DrawHudRegion(new Rect2(370, 221, 103, 44), new Rect2(710, 545, 300, 210));
+        DrawPlantCell(_seed, 3, new Rect2(371, 221, 43, 43));
+        Text(DesignNames.Seed(_seed), new Vector2(413, 243), 8, Parchment);
+        Text($"Q {Math.Max(0, _dewCooldown):0.0}s", new Vector2(413, 255), 7, Cyan);
+
+        Enemy? boss = _enemies.FirstOrDefault(enemy => enemy.Type == EnemyType.LanternPumpkinKing);
         if (boss != null)
         {
-            Panel(new Rect2(173, 47, 294, 20), new Color(Deep, 0.88f), Pumpkin.Darkened(0.18f));
-            DrawRect(new Rect2(181, 55, 278 * Mathf.Clamp(boss.Health / boss.MaxHealth, 0, 1), 5), Pumpkin);
-            Text("灯笼南瓜王", new Vector2(173, 63), 9, Parchment, 294, HorizontalAlignment.Center);
+            DrawHudRegion(new Rect2(106, 41, 268, 25), new Rect2(55, 400, 1430, 145));
+            DrawRect(new Rect2(119, 51, 242 * Mathf.Clamp(boss.Health / boss.MaxHealth, 0, 1), 7), Pumpkin);
+            Text("灯笼南瓜王", new Vector2(110, 64), 8, Parchment, 260, HorizontalAlignment.Center);
         }
+    }
 
-        Panel(new Rect2(12, 330, 241, 23), new Color(Deep, 0.84f), Wood.Darkened(0.18f));
-        Text("左键 芽弹   右键 播种   E 收割", new Vector2(21, 347), 10, Parchment);
-        Panel(new Rect2(438, 330, 190, 23), new Color(Deep, 0.84f), Wood.Darkened(0.18f));
-        string dew = _dewCooldown <= 0 ? "Q 晨露圈：就绪" : $"Q 晨露圈：{_dewCooldown:0.0}s";
-        string roll = _rollCooldown <= 0 ? "翻滚：就绪" : $"翻滚：{_rollCooldown:0.0}s";
-        Text(dew, new Vector2(447, 347), 9, _dewCooldown <= 0 ? MoonCyan : Parchment.Darkened(0.35f));
-        Text(roll, new Vector2(546, 347), 9, _rollCooldown <= 0 ? SproutGreen : Parchment.Darkened(0.35f));
+    private void DrawMap()
+    {
+        DrawRect(new Rect2(0, 0, Width, Height), new Color(Deep, 0.91f));
+        DrawMenuPanel(new Rect2(17, 14, 446, 238), 0);
+        Text("月根网络 · 春季示意地图", new Vector2(28, 38), 14, Parchment);
+        Text("Boss 需抵达相邻房后揭示 · K 为目标房选择契约", new Vector2(214, 36), 8, Cyan);
 
-        if (_toastTimer > 0)
+        foreach (DesignRoom room in _map.Rooms)
         {
-            float alpha = Mathf.Clamp(_toastTimer * 2, 0, 1);
-            DrawRect(new Rect2(218, 292, 204, 25), new Color(Deep, 0.78f * alpha));
-            Text(_toast, new Vector2(218, 309), 11, new Color(Parchment, alpha), 204, HorizontalAlignment.Center);
+            foreach (int neighborId in room.Connections.Where(id => id > room.Id))
+            {
+                DesignRoom neighbor = _map.Room(neighborId);
+                Vector2 a = MapPosition(room);
+                Vector2 b = MapPosition(neighbor);
+                bool rooted = room.RootTag != RootTag.None && neighbor.RootTag != RootTag.None;
+                DrawLine(a, b, rooted ? Cyan : new Color(Wood, 0.65f), rooted ? 5 : 2);
+            }
         }
 
-        if (_state == RunState.Playing && !_usingControllerAim)
-            DrawCrosshair(GetLocalMousePosition());
+        foreach (DesignRoom room in _map.Rooms)
+        {
+            bool visible = room.Discovered || room.Id == _map.CurrentRoomId || _map.Rooms.Any(discovered => discovered.Discovered && discovered.Connections.Contains(room.Id));
+            if (!visible) continue;
+            Vector2 p = MapPosition(room);
+            bool hiddenBoss = room.Type == RoomType.Boss && !room.BossRevealed;
+            int icon = room.RootTag != RootTag.None ? NetworkIcon(room.RootTag) : room.Cleared ? 9 : 8;
+            DrawGridCell("atlas.network", 4, 4, icon % 4, icon / 4, new Rect2(p.X - 22, p.Y - 22, 44, 44), room.Id == _map.CurrentRoomId ? Colors.White : new Color(1, 1, 1, 0.78f));
+            string label = hiddenBoss ? "未知" : DesignNames.Room(room.Type);
+            Text(label, new Vector2(p.X - 27, p.Y + 24), 7, room.Id == _map.CurrentRoomId ? Honey : Parchment, 54, HorizontalAlignment.Center);
+            if (room.Weather != RoomWeather.Gloom)
+            {
+                int weatherIcon = room.Weather == RoomWeather.Rain ? 12 : 13;
+                DrawGridCell("atlas.network", 4, 4, weatherIcon % 4, weatherIcon / 4, new Rect2(p.X + 10, p.Y - 25, 27, 27));
+            }
+        }
+
+        Text($"已激活：{(_recipes.Count == 0 ? "尚无生态配方" : string.Join(" / ", _recipes))}", new Vector2(31, 177), 8, _recipes.Count > 0 ? Sprout : Parchment);
+        Text("候选：雨后菌环（湿润+孢子+附着）", new Vector2(31, 190), 7, Cyan);
+
+        List<DesignRoom> routes = TravelOptions();
+        for (int i = 0; i < routes.Count; i++)
+        {
+            Rect2 card = RouteCard(i, routes.Count);
+            DrawMenuButton(card, i == _routeIndex);
+            DesignRoom room = routes[i];
+            string type = room.Type == RoomType.Boss && !room.BossRevealed ? "未知根结" : DesignNames.Room(room.Type);
+            Text($"{i + 1} {type}", new Vector2(card.Position.X, card.Position.Y + 16), 8, Parchment, card.Size.X, HorizontalAlignment.Center);
+            Text($"{DesignNames.Weather(room.Weather)}{(string.IsNullOrEmpty(room.Contract) ? "" : $" · {room.Contract}")}", new Vector2(card.Position.X, card.Position.Y + 29), 7, room.Weather == RoomWeather.Rain ? Cyan : Honey, card.Size.X, HorizontalAlignment.Center);
+        }
     }
 
-    private void DrawHeart(Vector2 center, float amount)
+    private void DrawHarvestChoice()
     {
-        Color empty = DeepBlue.Lightened(0.08f);
-        Color fill = HealthRed;
-        DrawCircle(center + new Vector2(-4, -2), 5, amount > 0 ? fill : empty);
-        DrawCircle(center + new Vector2(4, -2), 5, amount > 1 ? fill : empty);
-        DrawRect(new Rect2(center + new Vector2(-7, -1), new Vector2(14, 6)), amount > 0 ? fill : empty);
-        DrawRect(new Rect2(center + new Vector2(-4, 5), new Vector2(8, 3)), amount > 0 ? fill.Darkened(0.12f) : empty);
+        DrawOverlayTitle("清房后的培育决策", "短期生存与跨房根网只能选择其一");
+        Rect2 harvest = ChoiceCard(0);
+        Rect2 root = ChoiceCard(1);
+        DrawMenuButton(harvest, true);
+        DrawMenuButton(root, false);
+        DrawGridCell("atlas.network", 4, 4, 6, 1, new Rect2(harvest.Position.X + 46, harvest.Position.Y + 10, 52, 52));
+        DrawGridCell("atlas.network", 4, 4, NetworkIcon(RootTagFor(_plants.First(plant => plant.Mature))) % 4, NetworkIcon(RootTagFor(_plants.First(plant => plant.Mature))) / 4, new Rect2(root.Position.X + 46, root.Position.Y + 10, 52, 52));
+        Text("1 立即收割", new Vector2(harvest.Position.X, harvest.Position.Y + 78), 12, Honey, harvest.Size.X, HorizontalAlignment.Center);
+        Text("完整触发收割效果与资源", new Vector2(harvest.Position.X, harvest.Position.Y + 96), 8, Parchment, harvest.Size.X, HorizontalAlignment.Center);
+        Text("2 留下根系", new Vector2(root.Position.X, root.Position.Y + 78), 12, Cyan, root.Size.X, HorizontalAlignment.Center);
+        Text("放弃该株即时收益，影响邻房与 Boss", new Vector2(root.Position.X, root.Position.Y + 96), 8, Parchment, root.Size.X, HorizontalAlignment.Center);
     }
 
-    private void DrawCrosshair(Vector2 p)
+    private void DrawReward()
     {
-        Color color = new(Parchment, 0.75f);
-        DrawLine(p + new Vector2(-7, 0), p + new Vector2(-3, 0), color, 1);
-        DrawLine(p + new Vector2(3, 0), p + new Vector2(7, 0), color, 1);
-        DrawLine(p + new Vector2(0, -7), p + new Vector2(0, -3), color, 1);
-        DrawLine(p + new Vector2(0, 3), p + new Vector2(0, 7), color, 1);
+        DrawOverlayTitle("芽变三选一", "当前标签相关 / 通用生存 / 转型");
+        string[] choices = RewardChoices();
+        for (int i = 0; i < choices.Length; i++)
+        {
+            Rect2 card = ChoiceCard(i);
+            DrawMenuButton(card, i == _choiceIndex);
+            DrawGridCell("atlas.relics", 4, 3, i % 4, i / 4, new Rect2(card.Position.X + 38, card.Position.Y + 9, 68, 54));
+            Text($"{i + 1} {choices[i]}", new Vector2(card.Position.X, card.Position.Y + 79), 10, Honey, card.Size.X, HorizontalAlignment.Center);
+            Text(RelicDescription(choices[i]), new Vector2(card.Position.X + 7, card.Position.Y + 96), 7, Parchment, card.Size.X - 14, HorizontalAlignment.Center);
+        }
     }
 
-    private void DrawUpgradeScreen()
+    private void DrawShop()
+    {
+        DrawOverlayTitle("豆包的月露货台", "商品与价格在地图生成时固定，离房不会刷新");
+        string[] names = ["恢复 1 点生命", "补充 1 个种荚", RewardChoices()[0]];
+        int[] prices = [8, 10, 22];
+        for (int i = 0; i < 3; i++)
+        {
+            Rect2 card = ChoiceCard(i);
+            DrawMenuButton(card, false);
+            DrawGridCell(i < 2 ? "atlas.pickups" : "atlas.relics", 4, i < 2 ? 4 : 3, i == 0 ? 3 : i == 1 ? 2 : 0, 0, new Rect2(card.Position.X + 42, card.Position.Y + 12, 60, 52));
+            Text($"{i + 1} {names[i]}", new Vector2(card.Position.X, card.Position.Y + 81), 9, Parchment, card.Size.X, HorizontalAlignment.Center);
+            Text($"◆ {prices[i]}", new Vector2(card.Position.X, card.Position.Y + 101), 9, Honey, card.Size.X, HorizontalAlignment.Center);
+        }
+    }
+
+    private void DrawGreenhouse()
+    {
+        DrawOverlayTitle("苔婆婆的温室", $"本关行动点：{(CurrentRoom.RewardClaimed ? "已使用" : "1")}");
+        string[] names = ["升级当前主种子", "移植最近根忆", "封存放弃奖励"];
+        string[] descriptions = ["强化一个明确行为", "改为月照节点", "下一关商店再次出现"];
+        for (int i = 0; i < 3; i++)
+        {
+            Rect2 card = ChoiceCard(i);
+            DrawMenuButton(card, !CurrentRoom.RewardClaimed && i == _choiceIndex);
+            DrawGridCell(i == 0 ? "atlas.plants" : i == 1 ? "atlas.network" : "atlas.interact", 4, 4, i == 0 ? 3 : i == 1 ? 0 : 1, i == 0 ? (int)_seed : i == 1 ? 1 : 3, new Rect2(card.Position.X + 42, card.Position.Y + 12, 60, 52));
+            Text($"{i + 1} {names[i]}", new Vector2(card.Position.X, card.Position.Y + 81), 9, Parchment, card.Size.X, HorizontalAlignment.Center);
+            Text(descriptions[i], new Vector2(card.Position.X, card.Position.Y + 101), 7, Cyan, card.Size.X, HorizontalAlignment.Center);
+        }
+    }
+
+    private void DrawPause()
+    {
+        DrawOverlayTitle("本局构筑", "Esc 继续 · Tab 查看月根地图");
+        Text($"主工具：{DesignNames.Weapon(_weapon)}", new Vector2(100, 105), 12, Parchment);
+        Text($"主种子：{DesignNames.Seed(_seed)}", new Vector2(100, 127), 12, Parchment);
+        Text($"遗物：{(_relics.Count == 0 ? "尚无" : string.Join(" / ", _relics.Take(4)))}", new Vector2(100, 149), 9, Honey);
+        Text($"生态配方：{(_recipes.Count == 0 ? "尚未形成" : string.Join(" / ", _recipes))}", new Vector2(100, 169), 9, Cyan);
+        Text($"有效时间：{TimeSpan.FromSeconds(_playTime):mm\\:ss}", new Vector2(100, 193), 9, Parchment);
+    }
+
+    private void DrawResult()
     {
         DrawRect(new Rect2(0, 0, Width, Height), new Color(Deep, 0.88f));
-        Text("选择一份月根祝福", new Vector2(0, 68), 24, Parchment, Width, HorizontalAlignment.Center);
-        Text("按 1 / 2 / 3，或点击卡片", new Vector2(0, 91), 11, MoonCyan, Width, HorizontalAlignment.Center);
-
-        for (int i = 0; i < _upgradeChoices.Count; i++)
-        {
-            Upgrade choice = _upgradeChoices[i];
-            Rect2 rect = CardRect(i);
-            bool selected = i == _hoveredCard;
-            if (selected) rect.Position += new Vector2(0, -5);
-            Panel(rect, selected ? Soil.Lightened(0.05f) : Soil.Darkened(0.17f), selected ? Honey : Wood);
-            DrawCircle(new Vector2(rect.GetCenter().X, rect.Position.Y + 34), 18, new Color(MoonCyan, selected ? 0.25f : 0.13f));
-            DrawUpgradeIcon(choice.Id, new Vector2(rect.GetCenter().X, rect.Position.Y + 34));
-            Text($"{i + 1}", new Vector2(rect.Position.X + 9, rect.Position.Y + 18), 11, Honey);
-            Text(choice.Name, new Vector2(rect.Position.X + 8, rect.Position.Y + 68), 15, Parchment, rect.Size.X - 16, HorizontalAlignment.Center);
-            Text(choice.Description, new Vector2(rect.Position.X + 13, rect.Position.Y + 94), 10, Parchment.Darkened(0.12f), rect.Size.X - 26, HorizontalAlignment.Center);
-            Text(choice.Tag, new Vector2(rect.Position.X + 36, rect.End.Y - 12), 9, MoonCyan, rect.Size.X - 72, HorizontalAlignment.Center);
-        }
+        DrawMenuPanel(new Rect2(65, 28, 350, 214), 0);
+        DrawCharacter(_bossDefeated ? "boss.spring" : "player", new Vector2(82, 53), 115, 115);
+        Text(_bossDefeated ? "春季根结已恢复" : "莱芽暂时退回营地", new Vector2(200, 77), 17, _bossDefeated ? Honey : Parchment);
+        Text($"结果：{(_bossDefeated ? "击败灯笼南瓜王" : "倒在苔灯地窖")}", new Vector2(205, 106), 10, Parchment);
+        Text($"探索房间 {_roomsCleared}   留根 {_roomRootsLeft}   配方 {_recipes.Count}", new Vector2(205, 128), 9, Cyan);
+        Text($"积分 {_score}   有效时间 {TimeSpan.FromSeconds(_playTime):mm\\:ss}", new Vector2(205, 149), 10, Honey);
+        Text("代表性成果", new Vector2(205, 177), 10, Parchment);
+        Text(_recipes.Count > 0 ? string.Join(" / ", _recipes) : "荒行：零配方路线", new Vector2(205, 196), 9, Sprout);
+        Text("Enter 返回标题", new Vector2(0, 229), 10, Parchment, Width, HorizontalAlignment.Center);
     }
 
-    private void DrawUpgradeIcon(string id, Vector2 center)
+    private void DrawOverlayTitle(string title, string subtitle)
     {
-        Color color = id is "heart" ? HealthRed : id is "damage" or "firerate" or "pierce" ? Honey : SproutGreen;
-        if (id == "heart")
-        {
-            DrawCircle(center + new Vector2(-4, -2), 5, color);
-            DrawCircle(center + new Vector2(4, -2), 5, color);
-            DrawRect(new Rect2(center + new Vector2(-7, 0), new Vector2(14, 7)), color);
-        }
-        else if (id is "growth" or "plant" or "seeds")
-        {
-            DrawLine(center + new Vector2(0, 9), center + new Vector2(0, -7), Moss, 3);
-            DrawCircle(center + new Vector2(-5, -4), 5, color);
-            DrawCircle(center + new Vector2(5, -7), 5, color.Lightened(0.15f));
-        }
-        else
-        {
-            DrawCircle(center, 8, color);
-            DrawRect(new Rect2(center + new Vector2(-2, -12), new Vector2(4, 24)), Parchment);
-            DrawRect(new Rect2(center + new Vector2(-12, -2), new Vector2(24, 4)), Parchment);
-        }
+        DrawRect(new Rect2(0, 0, Width, Height), new Color(Deep, 0.78f));
+        DrawMenuPanel(new Rect2(27, 18, 426, 229), 0);
+        Text(title, new Vector2(44, 52), 16, Parchment, 392, HorizontalAlignment.Center);
+        Text(subtitle, new Vector2(44, 70), 8, Cyan, 392, HorizontalAlignment.Center);
     }
 
-    private void DrawPauseScreen()
+    private void DrawMenuPanel(Rect2 destination, int kind)
     {
-        DrawRect(new Rect2(0, 0, Width, Height), new Color(Deep, 0.82f));
-        Panel(new Rect2(170, 80, 300, 203), new Color(DeepBlue, 0.96f), Honey);
-        Text("旅程暂停", new Vector2(170, 119), 25, Parchment, 300, HorizontalAlignment.Center);
-        Text($"房间 {_room}/5   月露 {_moonDew}   种荚 {_seedPods}/{_maxSeedPods}", new Vector2(170, 151), 12, MoonCyan, 300, HorizontalAlignment.Center);
-        Text($"伤害 ×{_damageMultiplier:0.00}   攻速 ×{_fireRateMultiplier:0.00}", new Vector2(170, 178), 11, Parchment, 300, HorizontalAlignment.Center);
-        Text($"生长 ×{_growthMultiplier:0.00}   收割 ×{_harvestMultiplier:0.00}", new Vector2(170, 199), 11, Parchment, 300, HorizontalAlignment.Center);
-        Rect2 resume = new(246, 231, 148, 32);
-        Panel(resume, resume.HasPoint(GetLocalMousePosition()) ? Wood.Lightened(0.16f) : Wood, Parchment);
-        Text("继续旅程", new Vector2(resume.Position.X, resume.Position.Y + 22), 14, Parchment, resume.Size.X, HorizontalAlignment.Center);
-        Text("Esc 继续", new Vector2(0, 305), 10, new Color(Parchment, 0.72f), Width, HorizontalAlignment.Center);
+        Rect2 source = kind == 0 ? new Rect2(40, 35, 680, 575) : new Rect2(780, 65, 480, 235);
+        DrawTextureRectRegion(_assets["atlas.menu"], destination, source);
     }
 
-    private void DrawEndScreen(bool victory)
+    private void DrawMenuButton(Rect2 destination, bool selected)
     {
-        DrawRect(new Rect2(0, 0, Width, Height), new Color(Deep, 0.86f));
-        Panel(new Rect2(140, 63, 360, 242), new Color(DeepBlue, 0.96f), victory ? Honey : HealthRed.Darkened(0.18f));
-        Text(victory ? "月光重归宁静" : "这次种子没有发芽", new Vector2(140, 112), 24, victory ? Honey : Parchment, 360, HorizontalAlignment.Center);
-        Text(victory ? "灯笼南瓜王恢复成了一颗安静的种子。" : "守圃人被送回了温室，根窟仍在等待。", new Vector2(155, 151), 12, Parchment, 330, HorizontalAlignment.Center);
-        Text($"抵达房间  {_room}/5", new Vector2(140, 190), 14, MoonCyan, 360, HorizontalAlignment.Center);
-        Text($"收集月露  {_moonDew}", new Vector2(140, 216), 13, Honey, 360, HorizontalAlignment.Center);
-        Rect2 restart = new(235, 255, 170, 34);
-        Panel(restart, restart.HasPoint(GetLocalMousePosition()) ? Wood.Lightened(0.16f) : Wood, Parchment);
-        Text("再次下潜", new Vector2(restart.Position.X, restart.Position.Y + 23), 14, Parchment, restart.Size.X, HorizontalAlignment.Center);
+        Rect2 source = selected ? new Rect2(835, 670, 620, 125) : new Rect2(835, 520, 620, 125);
+        DrawTextureRectRegion(_assets["atlas.menu"], destination, source);
     }
 
-    private void Panel(Rect2 rect, Color fill, Color border)
+    private void DrawHudRegion(Rect2 destination, Rect2 source)
     {
-        DrawRect(rect, new Color(Deep, 0.9f));
-        DrawRect(rect.Grow(-2), border);
-        DrawRect(rect.Grow(-4), fill);
-        DrawRect(new Rect2(rect.Position + new Vector2(5, 5), new Vector2(3, 3)), Honey.Darkened(0.18f));
-        DrawRect(new Rect2(new Vector2(rect.End.X - 8, rect.Position.Y + 5), new Vector2(3, 3)), Honey.Darkened(0.18f));
+        DrawTextureRectRegion(_assets["atlas.hud"], destination, source);
     }
+
+    private void DrawGridCell(string key, int columns, int rows, int column, int row, Rect2 destination, Color? modulate = null)
+    {
+        Texture2D texture = _assets[key];
+        float cellWidth = texture.GetWidth() / (float)columns;
+        float cellHeight = texture.GetHeight() / (float)rows;
+        Rect2 source = new(column * cellWidth, row * cellHeight, cellWidth, cellHeight);
+        DrawTextureRectRegion(texture, destination, source, modulate ?? Colors.White);
+    }
+
+    private void DrawPlantCell(SeedType seed, int stage, Rect2 destination) =>
+        DrawGridCell("atlas.plants", 4, 4, stage, (int)seed, destination);
+
+    private void DrawWeaponSprite(WeaponType weapon, Vector2 position, float size) =>
+        DrawGridCell("atlas.weapons", 4, 3, 0, (int)weapon, new Rect2(position.X, position.Y, size, size));
+
+    private void DrawInteractCell(int column, int row, Rect2 destination, Color? modulate = null) =>
+        DrawGridCell("atlas.interact", 4, 4, column, row, destination, modulate);
+
+    private void DrawCharacter(string key, Vector2 position, float width, float height) =>
+        DrawTextureRect(_assets[key], new Rect2(position, new Vector2(width, height)), false);
+
+    private static int DirectionIndex(Vector2 direction)
+    {
+        if (Math.Abs(direction.X) > Math.Abs(direction.Y)) return direction.X < 0 ? 1 : 3;
+        return direction.Y < 0 ? 2 : 0;
+    }
+
+    private static int NetworkIcon(RootTag tag) => tag switch
+    {
+        RootTag.Wet => 0,
+        RootTag.Burning => 1,
+        RootTag.Spore => 2,
+        RootTag.Rooted => 3,
+        RootTag.Moonlit => 4,
+        RootTag.Corrupted => 5,
+        RootTag.Harvest => 6,
+        RootTag.Attached => 7,
+        _ => 8
+    };
+
+    private static Vector2 MapPosition(DesignRoom room) => new(66 + room.MapX * 78, 35 + room.MapY * 27);
+
+    private static Rect2 RouteCard(int index, int count)
+    {
+        float width = Math.Min(112, (420f - Math.Max(0, count - 1) * 6) / Math.Max(1, count));
+        float total = width * count + Math.Max(0, count - 1) * 6;
+        return new Rect2((Width - total) / 2 + index * (width + 6), 205, width, 39);
+    }
+
+    private static Rect2 ChoiceCard(int index) => new(35 + index * 139, 82, 132, 130);
+
+    private static string RelicDescription(string relic) => relic switch
+    {
+        "雨后豆荚" => "湿润地豆弹额外弹射 1 次",
+        "旧铜喷头" => "晨露圈半径 +25%，冷却 +1 秒",
+        "暖手石" => "燃烧持续时间 +1.5 秒",
+        "空心瓜柄" => "瓜墙破碎造成额外伤害",
+        "蜗牛时钟" => "植物成长更快，移动略慢",
+        "三齿小耙" => "三种植物同收割返还种荚",
+        "月下玻璃瓶" => "月照植物强化并增加风险",
+        "不漏水的靴子" => "湿地加速，翻滚延伸湿润",
+        "园丁的便签" => "每房首株跳过嫩芽阶段",
+        "金色稻壳" => "暴击推进最近植物成长",
+        "双月种盘" => "植物上限 +2，收割范围降低",
+        "倒栽花盆" => "种子优先附着，绽放增强",
+        _ => "改变本局的种植与收割循环"
+    };
 
     private void Text(string value, Vector2 position, int size, Color color, float width = -1, HorizontalAlignment alignment = HorizontalAlignment.Left)
     {
         if (_font == null) return;
-        DrawString(_font, position + Vector2.One, value, alignment, width, size, new Color(Deep, color.A * 0.9f));
         DrawString(_font, position, value, alignment, width, size, color);
     }
 }
